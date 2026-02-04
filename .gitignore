@@ -1,6 +1,8 @@
 .vscode/settings.json
 .catkin_workspace
 build/
+install/
+log/
 devel/
 files/
 src/CMakeLists.txt
