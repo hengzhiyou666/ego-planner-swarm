@@ -7,13 +7,13 @@ from launch_ros.actions import Node
 def generate_launch_description():
     # LaunchConfigurations
     map_size_x = LaunchConfiguration('map_size_x_', default=42.0)
-    map_size_y = LaunchConfiguration('map_size_y_', default=30.0)
-    map_size_z = LaunchConfiguration('map_size_z_', default=5.0)
+    map_size_y = LaunchConfiguration('map_size_y_', default=30.0)  # 原为30,0
+    map_size_z = LaunchConfiguration('map_size_z_', default=5.0)  # 原为5.0
     
-    odometry_topic = LaunchConfiguration('odometry_topic', default='odom')
+    odometry_topic = LaunchConfiguration('odometry_topic', default='odometry')
     camera_pose_topic = LaunchConfiguration('camera_pose_topic', default='camera_pose')
-    depth_topic = LaunchConfiguration('depth_topic', default='depth_image')
-    cloud_topic = LaunchConfiguration('cloud_topic', default='cloud')
+    depth_topic = LaunchConfiguration('depth_topic', default='depth')
+    cloud_topic = LaunchConfiguration('cloud_topic', default='lidar_points')
     
     cx = LaunchConfiguration('cx', default=321.04638671875)
     cy = LaunchConfiguration('cy', default=243.44969177246094)
@@ -47,6 +47,7 @@ def generate_launch_description():
     obj_num_set = LaunchConfiguration('obj_num_set', default=10)
     
     drone_id = LaunchConfiguration('drone_id', default=0)
+    pose_type = LaunchConfiguration('pose_type', default=1)
 
     # DeclareLaunchArguments
     map_size_x_arg = DeclareLaunchArgument('map_size_x_', default_value=map_size_x, description='Map size along X')
@@ -85,6 +86,7 @@ def generate_launch_description():
     use_distinctive_trajs_arg = DeclareLaunchArgument('use_distinctive_trajs', default_value=use_distinctive_trajs, description='Use distinctive trajectories')
     obj_num_set_arg = DeclareLaunchArgument('obj_num_set', default_value=obj_num_set, description='Number of objects')
     drone_id_arg = DeclareLaunchArgument('drone_id', default_value=drone_id, description='Drone ID')
+    pose_type_arg = DeclareLaunchArgument('pose_type', default_value=pose_type, description='grid_map pose type: 1=PoseStamped, 2=Odometry')
 
     # Ego Planner Node
     ego_planner_node = Node(
@@ -93,7 +95,7 @@ def generate_launch_description():
         name=['drone_', drone_id, '_ego_planner_node'],
         output='screen',
         remappings=[
-            ('odom_world', ['drone_', drone_id, '_', odometry_topic]),
+            ('odom_world', odometry_topic),
             ('planning/bspline', ['drone_', drone_id, '_planning/bspline']),
             ('planning/data_display', ['drone_', drone_id, '_planning/data_display']),
             ('planning/broadcast_bspline_from_planner', '/broadcast_bspline'),
@@ -105,7 +107,7 @@ def generate_launch_description():
             ('optimal_list', ['drone_', drone_id, '_plan_vis/optimal_list']),
             ('a_star_list', ['drone_', drone_id, '_plan_vis/a_star_list']),
             
-            ('grid_map/odom', ['drone_', drone_id, '_', odometry_topic]),
+            ('grid_map/odom', odometry_topic),
             ('grid_map/cloud', ['drone_', drone_id, '_', cloud_topic]),
             ('grid_map/pose', ['drone_', drone_id, '_', camera_pose_topic]),
             ('grid_map/depth', ['drone_', drone_id, '_', depth_topic]),
@@ -145,9 +147,9 @@ def generate_launch_description():
             {'grid_map/local_update_range_x': 5.5},
             {'grid_map/local_update_range_y': 5.5},
             {'grid_map/local_update_range_z': 4.5},
-            {'grid_map/obstacles_inflation': 0.099},
-            {'grid_map/local_map_margin': 10},
-            {'grid_map/ground_height': -0.01},
+            {'grid_map/obstacles_inflation': 0.099},  # 障碍膨胀半径，太大容易将机器人包进障碍中
+            {'grid_map/local_map_margin': 10},  # 栅格边界预留margin（格数）
+            {'grid_map/ground_height': -5.0},  # 原为-0.01,地面高度z值
             # camera parameter
             {'grid_map/cx': cx},
             {'grid_map/cy': cy},
@@ -158,9 +160,9 @@ def generate_launch_description():
             {'grid_map/depth_filter_tolerance': 0.15},
             {'grid_map/depth_filter_maxdist': 5.0},
             {'grid_map/depth_filter_mindist': 0.2},
-            {'grid_map/depth_filter_margin': 2},
-            {'grid_map/k_depth_scaling_factor': 1000.0},
-            {'grid_map/skip_pixel': 2},
+            {'grid_map/depth_filter_margin': 4},  # 原为2,深度滤波时的像素，用于邻域判断
+            {'grid_map/k_depth_scaling_factor': 1.0}, # 原为1000
+            {'grid_map/skip_pixel': 4},  # 原为2,每隔多少像素取一个深度点（减少计算量）
             # local fusion
             {'grid_map/p_hit': 0.65},
             {'grid_map/p_miss': 0.35},
@@ -171,10 +173,10 @@ def generate_launch_description():
             {'grid_map/max_ray_length': 4.5},
             
             {'grid_map/virtual_ceil_height': 2.9},
-            {'grid_map/visualization_truncate_height': 1.8},
+            {'grid_map/visualization_truncate_height': 2.5},  # 原为1.8，可视化截断显示高度
             {'grid_map/show_occ_time': False},
-            {'grid_map/pose_type': 1},
-            {'grid_map/frame_id': "world"},
+            {'grid_map/pose_type': pose_type},
+            {'grid_map/frame_id': "head_init"},  # 原为world
             # planner manager
             {'manager/max_vel': max_vel},
             {'manager/max_acc': max_acc},
@@ -246,7 +248,7 @@ def generate_launch_description():
     ld.add_action(use_distinctive_trajs_arg)
     ld.add_action(obj_num_set_arg)
     ld.add_action(drone_id_arg)
-
+    ld.add_action(pose_type_arg)
 
     # Add Node
     ld.add_action(ego_planner_node)
