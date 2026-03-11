@@ -22,20 +22,20 @@ def generate_launch_description():
     map_size_z = LaunchConfiguration('map_size_z', default=10.0)  # 原为2.0
 
     # ----- 真实机器狗 / 本地地图 开关 -----
-    use_real_robot = LaunchConfiguration('use_real_robot', default=False)
+    use_real_robot = LaunchConfiguration('use_real_robot', default=True)
     load_local_map = LaunchConfiguration('load_local_map', default=False)
     map_file = LaunchConfiguration('map_file', default='')
 
     # ----- 机器狗话题与相机参数（use_real_robot 时使用） -----
-    odometry_topic = LaunchConfiguration('odometry_topic', default='/odom')
-    depth_topic = LaunchConfiguration('depth_topic', default='/camera/depth/image_rect_raw')
-    cloud_topic = LaunchConfiguration('cloud_topic', default='/camera/depth/points')
+    odometry_topic = LaunchConfiguration('odometry_topic', default='/odometry')
+    depth_topic = LaunchConfiguration('depth_topic', default='/depth')
+    cloud_topic = LaunchConfiguration('cloud_topic', default='/lidar_points')
     camera_pose_topic = LaunchConfiguration('camera_pose_topic', default='/camera_pose')
     pose_type = LaunchConfiguration('pose_type', default=2)
-    cx = LaunchConfiguration('cx', default='320.0')
-    cy = LaunchConfiguration('cy', default='240.0')
-    fx = LaunchConfiguration('fx', default='400.0')
-    fy = LaunchConfiguration('fy', default='400.0')
+    cx = LaunchConfiguration('cx', default='959.196655')
+    cy = LaunchConfiguration('cy', default='538.812378')
+    fx = LaunchConfiguration('fx', default='805.299072')
+    fy = LaunchConfiguration('fy', default='805.879883')
 
     # ----- 仿真用里程计话题（use_real_robot=False 时由 simulator 使用） -----
     odom_topic_sim = LaunchConfiguration('odom_topic', default='visual_slam/odom')
