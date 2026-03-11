@@ -9,6 +9,7 @@ namespace ego_planner
     node_ = node;
     
     current_wp_ = 0;
+    have_pct_path_ = false;
     exec_state_ = FSM_EXEC_STATE::INIT;
     have_target_ = false;
     have_odom_ = false;
@@ -150,6 +151,18 @@ namespace ego_planner
 
       readGivenWps();
     }
+    else if (target_type_ == TARGET_TYPE::REFENCE_PATH)
+    {
+      pct_path_sub_ = node_->create_subscription<nav_msgs::msg::Path>(
+          "/pct_path",
+          1,
+          [this](const std::shared_ptr<const nav_msgs::msg::Path> &msg)
+          {
+            this->pctPathCallback(msg);
+          });
+
+      RCLCPP_INFO(node_->get_logger(), "REFENCE_PATH mode: waiting for /pct_path and odom.");
+    }
     else
       cout << "Wrong target_type_ value! target_type_=" << target_type_ << endl;
   }
@@ -183,6 +196,80 @@ namespace ego_planner
     planNextWaypoint(wps_[wp_id_]);
   }
 
+  void EGOReplanFSM::pctPathCallback(const std::shared_ptr<const nav_msgs::msg::Path> &msg)
+  {
+    if (msg->poses.empty())
+    {
+      RCLCPP_WARN(node_->get_logger(), "Received empty /pct_path, ignore.");
+      return;
+    }
+
+    // 将 /pct_path 转换为间隔约 5m 的离散路点
+    waypoint_num_ = 0;
+
+    const size_t max_wp = 50;
+
+    Eigen::Vector3d last_pt;
+    double accumulated_dist = 0.0;
+
+    for (size_t i = 0; i < msg->poses.size(); ++i)
+    {
+      const auto &pose = msg->poses[i].pose;
+      Eigen::Vector3d pt(pose.position.x, pose.position.y, pose.position.z);
+
+      if (i == 0)
+      {
+        // 第一个点直接作为起点
+        waypoints_[waypoint_num_][0] = pt.x();
+        waypoints_[waypoint_num_][1] = pt.y();
+        waypoints_[waypoint_num_][2] = pt.z();
+        last_pt = pt;
+        waypoint_num_++;
+
+        if (waypoint_num_ >= (int)max_wp)
+          break;
+
+        continue;
+      }
+
+      double dist = (pt - last_pt).norm();
+      accumulated_dist += dist;
+      last_pt = pt;
+
+      // 每累计约 5m 取一个路点，保证“前进 5m 一个局部目标”
+      if (accumulated_dist >= 5.0 - 1e-3)
+      {
+        waypoints_[waypoint_num_][0] = pt.x();
+        waypoints_[waypoint_num_][1] = pt.y();
+        waypoints_[waypoint_num_][2] = pt.z();
+
+        waypoint_num_++;
+        accumulated_dist = 0.0;
+
+        if (waypoint_num_ >= (int)max_wp)
+          break;
+      }
+    }
+
+    if (waypoint_num_ <= 0)
+    {
+      RCLCPP_WARN(node_->get_logger(), "No valid waypoints generated from /pct_path.");
+      return;
+    }
+
+    have_pct_path_ = true;
+    have_trigger_ = true; /* REFENCE_PATH 下用收到路径作为触发 */
+
+    if (!have_odom_)
+    {
+      RCLCPP_WARN(node_->get_logger(), "/pct_path received but odom not ready yet.");
+      return;
+    }
+
+    // 利用生成的路点序列，复用原有 readGivenWps + planNextWaypoint 逻辑
+    readGivenWps();
+  }
+
   void EGOReplanFSM::planNextWaypoint(const Eigen::Vector3d next_wp)
   {
     bool success = false;
@@ -209,11 +296,7 @@ namespace ego_planner
         changeFSMExecState(GEN_NEW_TRAJ, "TRIG");
       else
       {
-        while (exec_state_ != EXEC_TRAJ)
-        {
-          rclcpp::spin_some(node_);
-          std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
+        /* 已在 executor 内，不再阻塞 spin_some，避免 "Node has already been added to an executor" */
         changeFSMExecState(REPLAN_TRAJ, "TRIG");
       }
 
@@ -540,7 +623,24 @@ namespace ego_planner
       }
       else
       {
-        changeFSMExecState(GEN_NEW_TRAJ, "FSM");
+        /* “Close to goal” 时规划会失败，视为已到达当前路点，切下一路点或结束 */
+        if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::REFENCE_PATH) &&
+            (odom_pos_ - end_pt_).norm() < no_replan_thresh_)
+        {
+          if (wp_id_ < waypoint_num_ - 1)
+          {
+            wp_id_++;
+            planNextWaypoint(wps_[wp_id_]);
+          }
+          else
+          {
+            have_target_ = false;
+            have_trigger_ = false;
+            changeFSMExecState(WAIT_TARGET, "FSM");
+          }
+        }
+        else
+          changeFSMExecState(GEN_NEW_TRAJ, "FSM");
       }
       break;
     }
@@ -555,7 +655,24 @@ namespace ego_planner
       }
       else
       {
-        changeFSMExecState(REPLAN_TRAJ, "FSM");
+        /* “Close to goal” 时规划会失败，视为已到达当前路点，切下一路点或结束 */
+        if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::REFENCE_PATH) &&
+            (odom_pos_ - end_pt_).norm() < no_replan_thresh_)
+        {
+          if (wp_id_ < waypoint_num_ - 1)
+          {
+            wp_id_++;
+            planNextWaypoint(wps_[wp_id_]);
+          }
+          else
+          {
+            have_target_ = false;
+            have_trigger_ = false;
+            changeFSMExecState(WAIT_TARGET, "FSM");
+          }
+        }
+        else
+          changeFSMExecState(REPLAN_TRAJ, "FSM");
       }
 
       break;
@@ -572,7 +689,7 @@ namespace ego_planner
       Eigen::Vector3d pos = info->position_traj_.evaluateDeBoorT(t_cur);
 
       /* && (end_pt_ - pos).norm() < 0.5 */
-      if ((target_type_ == TARGET_TYPE::PRESET_TARGET) &&
+      if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::REFENCE_PATH) &&
           (wp_id_ < waypoint_num_ - 1) &&
           (end_pt_ - pos).norm() < no_replan_thresh_)
       {
@@ -591,6 +708,7 @@ namespace ego_planner
             wp_id_ = 0;
             planNextWaypoint(wps_[wp_id_]);
           }
+          /* REFENCE_PATH: 跑完当前路径后进入 WAIT_TARGET，等待新 /pct_path，不自动循环 */
 
           changeFSMExecState(WAIT_TARGET, "FSM");
           goto force_return;

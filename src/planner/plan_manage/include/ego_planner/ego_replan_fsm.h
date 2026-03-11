@@ -66,6 +66,7 @@ namespace ego_planner
 
     /* planning data */
     bool have_trigger_, have_target_, have_odom_, have_new_target_, have_recv_pre_agent_;
+    bool have_pct_path_{false};
     FSM_EXEC_STATE exec_state_;
     int continously_called_times_{0};
 
@@ -89,6 +90,7 @@ namespace ego_planner
     rclcpp::Subscription<traj_utils::msg::MultiBsplines>::SharedPtr swarm_trajs_sub_;
     rclcpp::Subscription<traj_utils::msg::Bspline>::SharedPtr broadcast_bspline_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr trigger_sub_;
+    rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr pct_path_sub_;
 
     // rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr replan_pub_;
     // rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr new_pub_;
@@ -109,6 +111,7 @@ namespace ego_planner
     void printFSMExecState();
 
     void readGivenWps();
+    void pctPathCallback(const std::shared_ptr<const nav_msgs::msg::Path> &msg);
     void planNextWaypoint(const Eigen::Vector3d next_wp);
     void getLocalTarget();
 

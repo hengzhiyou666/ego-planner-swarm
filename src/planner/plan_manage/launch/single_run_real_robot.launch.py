@@ -137,7 +137,7 @@ def generate_launch_description():
             'cx': cx, 'cy': cy, 'fx': fx, 'fy': fy,
             'pose_type': pose_type,
             'max_vel': '2.0', 'max_acc': '6.0', 'planning_horizon': '7.5',
-            'use_distinctive_trajs': 'True', 'flight_type': '2',
+            'use_distinctive_trajs': 'True', 'flight_type': '3',
             'point_num': '4',
             'point0_x': '31.2', 'point0_y': '-6.4', 'point0_z': '1.9',
             'point1_x': '33.0', 'point1_y': '-2.5', 'point1_z': '1.9',
