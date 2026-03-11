@@ -7,6 +7,7 @@
 #include <iostream>
 // #include <bspline_opt/polynomial_traj.h>
 #include <rclcpp/rclcpp.hpp>
+#include <string>
 #include <vector>
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
@@ -20,6 +21,7 @@ namespace ego_planner
   {
   private:
     rclcpp::Node::SharedPtr node_;
+    std::string frame_id_;  /* 与 grid_map/frame_id 一致，用于 RViz 中与 pct_path、odometry 同系 */
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr goal_point_pub;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr global_list_pub;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr init_list_pub;
@@ -33,6 +35,15 @@ namespace ego_planner
     PlanningVisualization(const rclcpp::Node::SharedPtr &node)
       : node_(node)
     {
+      // 只读取已有的 grid_map/frame_id 参数，不再重复声明，避免 ParameterAlreadyDeclaredException
+      if (node_->has_parameter("grid_map/frame_id"))
+      {
+        node_->get_parameter("grid_map/frame_id", frame_id_);
+      }
+      else
+      {
+        frame_id_ = "head_init";
+      }
       // 初始化发布者，调整消息类型和队列大小
       goal_point_pub = node_->create_publisher<visualization_msgs::msg::Marker>("goal_point", 2);
       global_list_pub = node_->create_publisher<visualization_msgs::msg::Marker>("global_list", 2);
