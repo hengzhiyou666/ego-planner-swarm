@@ -1040,59 +1040,55 @@ namespace ego_planner
 
   void EGOReplanFSM::getLocalTarget()
   {
-    double t;
-
-    double t_step = planning_horizen_ / 20 / planner_manager_->pp_.max_vel_;
-    double dist_min = 9999, dist_min_t = 0.0;
-    for (t = planner_manager_->global_data_.last_progress_time_; t < planner_manager_->global_data_.global_duration_; t += t_step)
+    const double t_step = 0.05;
+    GlobalTrajData &global_data = planner_manager_->global_data_;
+    const double global_duration = global_data.global_duration_;
+    double dist_min = 1e9;
+    double t_closest = global_data.last_progress_time_;
+    for (double t = 0.0; t <= global_duration + 1e-6; t += t_step)
     {
       Eigen::Vector3d pos_t = planner_manager_->global_data_.getPosition(t);
       double dist = (pos_t - start_pt_).norm();
 
-      if (t < planner_manager_->global_data_.last_progress_time_ + 1e-5 && dist > planning_horizen_)
-      {
-        // Important cornor case!
-        for (; t < planner_manager_->global_data_.global_duration_; t += t_step)
-        {
-          Eigen::Vector3d pos_t_temp = planner_manager_->global_data_.getPosition(t);
-          double dist_temp = (pos_t_temp - start_pt_).norm();
-          if (dist_temp < planning_horizen_)
-          {
-            pos_t = pos_t_temp;
-            dist = (pos_t - start_pt_).norm();
-            cout << "Escape cornor case \"getLocalTarget\"" << endl;
-            break;
-          }
-        }
-      }
-
       if (dist < dist_min)
       {
         dist_min = dist;
-        dist_min_t = t;
+        t_closest = t;
       }
 
-      if (dist >= planning_horizen_)
-      {
-        local_target_pt_ = pos_t;
-        planner_manager_->global_data_.last_progress_time_ = dist_min_t;
-        break;
-      }
     }
-    if (t > planner_manager_->global_data_.global_duration_) // Last global point
+    global_data.last_progress_time_ = t_closest;
+
+    // 从最近点开始向前截取约 7 米的一段作为局部规划的目标路径/引导边界
+    const double segment_length = 7.0;
+    std::vector<Eigen::Vector3d> segment_pts;
+    segment_pts.push_back(global_data.getPosition(t_closest));
+    double arc = 0.0;
+    double t_cur = t_closest;
+    double t_end = t_closest;
+    Eigen::Vector3d pos_prev = segment_pts.front();
+    while (arc < segment_length && t_cur < global_duration - 1e-6)
+    {
+      t_cur = std::min(t_cur + t_step, global_duration);
+      Eigen::Vector3d pos_cur = global_data.getPosition(t_cur);
+      arc += (pos_cur - pos_prev).norm();
+      pos_prev = pos_cur;
+      segment_pts.push_back(pos_cur);
+      t_end = t_cur;
+    }
+    if (segment_pts.empty())
     {
       local_target_pt_ = end_pt_;
-      planner_manager_->global_data_.last_progress_time_ = planner_manager_->global_data_.global_duration_;
-    }
-
-    if ((end_pt_ - local_target_pt_).norm() < (planner_manager_->pp_.max_vel_ * planner_manager_->pp_.max_vel_) / (2 * planner_manager_->pp_.max_acc_))
-    {
       local_target_vel_ = Eigen::Vector3d::Zero();
+      planner_manager_->setLocalGuideSegment(std::vector<Eigen::Vector3d>());
+      return;
     }
+    local_target_pt_ = segment_pts.back();
+    if ((end_pt_ - local_target_pt_).norm() < (planner_manager_->pp_.max_vel_ * planner_manager_->pp_.max_vel_) / (2 * planner_manager_->pp_.max_acc_))
+      local_target_vel_ = Eigen::Vector3d::Zero();
     else
-    {
-      local_target_vel_ = planner_manager_->global_data_.getVelocity(t);
-    }
+      local_target_vel_ = global_data.getVelocity(t_end);
+    planner_manager_->setLocalGuideSegment(segment_pts);
   }
 
 } // namespace ego_planner

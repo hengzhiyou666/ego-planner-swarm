@@ -51,6 +51,10 @@ namespace ego_planner
     LocalTrajData local_data_;
     GlobalTrajData global_data_;
     GridMap::Ptr grid_map_;
+    /* 局部规划使用的引导路径：从全局路径上最近点起向前约 7m 的一段 */
+    std::vector<Eigen::Vector3d> local_guide_segment_;
+    void setLocalGuideSegment(const std::vector<Eigen::Vector3d> &seg) { local_guide_segment_ = seg; }
+    const std::vector<Eigen::Vector3d> &getLocalGuideSegment() const { return local_guide_segment_; }
     fast_planner::ObjPredictor::Ptr obj_predictor_;    
     SwarmTrajData swarm_trajs_buf_;
 

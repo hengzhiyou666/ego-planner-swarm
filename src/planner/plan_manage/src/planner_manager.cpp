@@ -82,6 +82,21 @@ namespace ego_planner
       {
         flag_first_call = false;
         flag_force_polynomial = false;
+        // 若有从全局路径截取的 7m 引导段，则直接用作局部规划的初始路径（目标路径/引导边界）
+        if (!local_guide_segment_.empty() && local_guide_segment_.size() >= 2)
+        {
+          point_set.push_back(start_pt);
+          for (const Eigen::Vector3d &pt : local_guide_segment_)
+            point_set.push_back(pt);
+          if ((point_set.back() - local_target_pt).norm() > 1e-3)
+            point_set.back() = local_target_pt;
+          start_end_derivatives.push_back(start_vel);
+          start_end_derivatives.push_back(local_target_vel);
+          start_end_derivatives.push_back(start_acc);
+          start_end_derivatives.push_back(Eigen::Vector3d::Zero());
+        }
+        else
+        {
         // 用于存储生成的轨迹
         PolynomialTraj gl_traj;
 
@@ -136,6 +151,7 @@ namespace ego_planner
         start_end_derivatives.push_back(local_target_vel);
         start_end_derivatives.push_back(gl_traj.evaluateAcc(0));
         start_end_derivatives.push_back(gl_traj.evaluateAcc(t));
+        }
       }
       else // Initial path generated from previous trajectory.
       {
