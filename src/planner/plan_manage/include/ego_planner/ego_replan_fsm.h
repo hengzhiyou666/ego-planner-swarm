@@ -63,6 +63,7 @@ namespace ego_planner
     double emergency_time_;
     bool flag_realworld_experiment_;
     bool enable_fail_safe_;
+    bool plan_xy_only_{false};  // 机器狗等：仅用 xy，z 强制为 0
 
     /* planning data */
     bool have_trigger_, have_target_, have_odom_, have_new_target_, have_recv_pre_agent_;

@@ -43,6 +43,7 @@ def generate_launch_description():
 
     flight_type = LaunchConfiguration('flight_type', default=2)
     use_distinctive_trajs = LaunchConfiguration('use_distinctive_trajs', default=True)
+    plan_xy_only = LaunchConfiguration('plan_xy_only', default=False)
     
     obj_num_set = LaunchConfiguration('obj_num_set', default=10)
     
@@ -84,6 +85,7 @@ def generate_launch_description():
     
     flight_type_arg = DeclareLaunchArgument('flight_type', default_value=flight_type, description='flight_type')
     use_distinctive_trajs_arg = DeclareLaunchArgument('use_distinctive_trajs', default_value=use_distinctive_trajs, description='Use distinctive trajectories')
+    plan_xy_only_arg = DeclareLaunchArgument('plan_xy_only', default_value=plan_xy_only, description='Plan in XY only, force z=0 (e.g. for robot dog)')
     obj_num_set_arg = DeclareLaunchArgument('obj_num_set', default_value=obj_num_set, description='Number of objects')
     drone_id_arg = DeclareLaunchArgument('drone_id', default_value=drone_id, description='Drone ID')
     pose_type_arg = DeclareLaunchArgument('pose_type', default_value=pose_type, description='grid_map pose type: 1=PoseStamped, 2=Odometry')
@@ -122,6 +124,7 @@ def generate_launch_description():
             {'fsm/emergency_time': 1.0},
             {'fsm/realworld_experiment': False},
             {'fsm/fail_safe': True},
+            {'fsm/plan_xy_only': plan_xy_only},
             
             {'fsm/waypoint_num': point_num},
             {'fsm/waypoint0_x': point0_x},
@@ -246,6 +249,7 @@ def generate_launch_description():
     
     ld.add_action(flight_type_arg)
     ld.add_action(use_distinctive_trajs_arg)
+    ld.add_action(plan_xy_only_arg)
     ld.add_action(obj_num_set_arg)
     ld.add_action(drone_id_arg)
     ld.add_action(pose_type_arg)

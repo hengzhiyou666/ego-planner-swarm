@@ -23,6 +23,7 @@ namespace ego_planner
     node_->declare_parameter("fsm/emergency_time", 1.0);
     node_->declare_parameter("fsm/realworld_experiment", false);
     node_->declare_parameter("fsm/fail_safe", true);
+    node_->declare_parameter("fsm/plan_xy_only", false);
 
     node_->get_parameter("fsm/flight_type", target_type_);
     node_->get_parameter("fsm/thresh_replan_time", replan_thresh_);
@@ -32,6 +33,7 @@ namespace ego_planner
     node_->get_parameter("fsm/emergency_time", emergency_time_);
     node_->get_parameter("fsm/realworld_experiment", flag_realworld_experiment_);
     node_->get_parameter("fsm/fail_safe", enable_fail_safe_);
+    node_->get_parameter("fsm/plan_xy_only", plan_xy_only_);
 
     have_trigger_ = !flag_realworld_experiment_;
 
@@ -181,18 +183,195 @@ namespace ego_planner
     {
       wps_[i](0) = waypoints_[i][0];
       wps_[i](1) = waypoints_[i][1];
-      wps_[i](2) = waypoints_[i][2];
+      wps_[i](2) = plan_xy_only_ ? 0.0 : waypoints_[i][2];
     }
 
-    // 用 visualization_->displayGoalPoint() 方法对waypoint进行可视化
+    wp_id_ = 0;
+
+    // REFENCE_PATH 且多路点：第一个目标点 = “最近点沿路径前进约2m处”，再沿路径到终点
+    if (target_type_ == TARGET_TYPE::REFENCE_PATH && waypoint_num_ > 1)
+    {
+      auto closestOnSegment = [](const Eigen::Vector3d &p, const Eigen::Vector3d &a, const Eigen::Vector3d &b,
+                                 Eigen::Vector3d &out_closest, double &out_t) -> double {
+        Eigen::Vector3d ap = p - a, ab = b - a;
+        double ab2 = ab.squaredNorm();
+        if (ab2 < 1e-12)
+        {
+          out_closest = a;
+          out_t = 0.0;
+          return (p - a).squaredNorm();
+        }
+        double t = (ap.dot(ab) / ab2);
+        t = std::max(0.0, std::min(1.0, t));
+        out_t = t;
+        out_closest = a + t * ab;
+        return (p - out_closest).squaredNorm();
+      };
+
+      // 1) 找路径上离当前位置最近的点 join_pt（位于 wps_[seg_idx] -> wps_[seg_idx+1] 的线段上）
+      Eigen::Vector3d join_pt = wps_[0];
+      double join_t = 0.0;
+      double best_d2 = 1e30;
+      int seg_idx = 0;
+      Eigen::Vector3d cand;
+      double cand_t = 0.0;
+      for (int i = 0; i < waypoint_num_ - 1; i++)
+      {
+        double d2 = closestOnSegment(odom_pos_, wps_[i], wps_[i + 1], cand, cand_t);
+        if (d2 < best_d2)
+        {
+          best_d2 = d2;
+          join_pt = cand;
+          join_t = cand_t;
+          seg_idx = i;
+        }
+      }
+      if (plan_xy_only_)
+        join_pt(2) = 0.0;
+
+      // 2) 顺着路径方向，从 join_pt 往前走约 2m，得到第一个目标点 first_pt
+      const double forward_dist = 2.0;
+      double remain = forward_dist;
+      Eigen::Vector3d first_pt = join_pt;
+
+      // 从当前线段的 join_t 位置开始往前推
+      Eigen::Vector3d a = wps_[seg_idx];
+      Eigen::Vector3d b = wps_[seg_idx + 1];
+      if (plan_xy_only_)
+      {
+        a(2) = 0.0;
+        b(2) = 0.0;
+      }
+      Eigen::Vector3d ab = b - a;
+      double seg_len = ab.norm();
+      double dist_to_b = (1.0 - join_t) * seg_len;
+
+      if (seg_len < 1e-6)
+      {
+        first_pt = join_pt;
+      }
+      else if (remain <= dist_to_b)
+      {
+        // 2m 落在同一段内
+        double t2 = join_t + remain / seg_len;
+        first_pt = a + t2 * ab;
+      }
+      else
+      {
+        // 先走到 b，再继续沿后续路段累计
+        remain -= dist_to_b;
+        first_pt = b;
+        int j = seg_idx + 1;
+        while (remain > 1e-6 && j < waypoint_num_ - 1)
+        {
+          Eigen::Vector3d p0 = wps_[j];
+          Eigen::Vector3d p1 = wps_[j + 1];
+          if (plan_xy_only_)
+          {
+            p0(2) = 0.0;
+            p1(2) = 0.0;
+          }
+          Eigen::Vector3d d = p1 - p0;
+          double L = d.norm();
+          if (L < 1e-6)
+          {
+            j++;
+            continue;
+          }
+          if (remain <= L)
+          {
+            first_pt = p0 + (remain / L) * d;
+            remain = 0.0;
+            break;
+          }
+          remain -= L;
+          first_pt = p1;
+          j++;
+        }
+      }
+      if (plan_xy_only_)
+        first_pt(2) = 0.0;
+
+      // 3) 用 first_pt 作为新的第一个 waypoint，并从其所在段之后继续到终点
+      std::vector<Eigen::Vector3d> new_wps;
+      new_wps.reserve(waypoint_num_ + 1);
+      new_wps.push_back(first_pt);
+      for (int i = seg_idx + 1; i < waypoint_num_; i++)
+      {
+        if ((wps_[i] - first_pt).norm() > 1e-3)
+          new_wps.push_back(wps_[i]);
+      }
+      wps_ = new_wps;
+      waypoint_num_ = (int)wps_.size();
+      wp_id_ = 0;
+
+      // 用 visualization_->displayGoalPoint() 方法对waypoint进行可视化（使用更新后的 wps_）
+      for (size_t i = 0; i < (size_t)waypoint_num_; i++)
+      {
+        visualization_->displayGoalPoint(wps_[i], Eigen::Vector4d(0, 0.5, 0.5, 1), 0.3, i);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+
+      std::vector<Eigen::Vector3d> waypoints_vec;
+      for (int i = 0; i < waypoint_num_; i++)
+        waypoints_vec.push_back(wps_[i]);
+
+      bool success = planner_manager_->planGlobalTrajWaypoints(
+          odom_pos_,
+          [&]() -> Eigen::Vector3d {
+            // 用“沿路径前进方向”的速度约束生成全局参考轨迹，避免因 odom_vel_ 横向/反向导致 min-snap 轨迹折返
+            Eigen::Vector3d v = odom_vel_;
+            if (plan_xy_only_)
+              v(2) = 0.0;
+            Eigen::Vector3d dir = first_pt - odom_pos_;
+            if (plan_xy_only_)
+              dir(2) = 0.0;
+            if (dir.norm() < 1e-3)
+              return Eigen::Vector3d::Zero();
+            Eigen::Vector3d u = dir.normalized();
+            double s = v.dot(u);
+            if (s <= 0.0)
+              return Eigen::Vector3d::Zero();
+            return s * u; // 只保留沿前进方向的速度分量
+          }(),
+          Eigen::Vector3d::Zero(),
+          waypoints_vec, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero());
+
+      if (success)
+      {
+        end_pt_ = wps_[wp_id_];
+        end_vel_.setZero();
+        have_target_ = true;
+        have_new_target_ = true;
+
+        constexpr double step_size_t = 0.1;
+        int i_end = floor(planner_manager_->global_data_.global_duration_ / step_size_t);
+        vector<Eigen::Vector3d> gloabl_traj(i_end);
+        for (int i = 0; i < i_end; i++)
+        {
+          gloabl_traj[i] = planner_manager_->global_data_.global_traj_.evaluate(i * step_size_t);
+          if (plan_xy_only_)
+            gloabl_traj[i](2) = 0.0;
+        }
+        visualization_->displayGlobalPathList(gloabl_traj, 0.1, 0);
+
+        if (exec_state_ == WAIT_TARGET)
+          changeFSMExecState(GEN_NEW_TRAJ, "TRIG");
+        else
+          changeFSMExecState(REPLAN_TRAJ, "TRIG");
+        return;
+      }
+      // 全路径规划失败时退化为只规划到第一个路点
+    }
+
+    // 非 REFENCE_PATH：用 visualization_->displayGoalPoint() 方法对waypoint进行可视化
     for (size_t i = 0; i < (size_t)waypoint_num_; i++)
     {
       visualization_->displayGoalPoint(wps_[i], Eigen::Vector4d(0, 0.5, 0.5, 1), 0.3, i);
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
-    // plan first global waypoint
-    wp_id_ = 0;
+    // 单路点或非 REFENCE_PATH 或上面全路径规划失败：只规划到第一个路点
     planNextWaypoint(wps_[wp_id_]);
   }
 
@@ -219,10 +398,10 @@ namespace ego_planner
 
       if (i == 0)
       {
-        // 第一个点直接作为起点
+        // 第一个点直接作为起点；plan_xy_only 时仅用 xy，z 强制为 0
         waypoints_[waypoint_num_][0] = pt.x();
         waypoints_[waypoint_num_][1] = pt.y();
-        waypoints_[waypoint_num_][2] = pt.z();
+        waypoints_[waypoint_num_][2] = plan_xy_only_ ? 0.0 : pt.z();
         last_pt = pt;
         waypoint_num_++;
 
@@ -236,12 +415,12 @@ namespace ego_planner
       accumulated_dist += dist;
       last_pt = pt;
 
-      // 每累计约 5m 取一个路点，保证“前进 5m 一个局部目标”
+      // 每累计约 5m 取一个路点，保证“前进 5m 一个局部目标”；plan_xy_only 时 z 强制为 0
       if (accumulated_dist >= 5.0 - 1e-3)
       {
         waypoints_[waypoint_num_][0] = pt.x();
         waypoints_[waypoint_num_][1] = pt.y();
-        waypoints_[waypoint_num_][2] = pt.z();
+        waypoints_[waypoint_num_][2] = plan_xy_only_ ? 0.0 : pt.z();
 
         waypoint_num_++;
         accumulated_dist = 0.0;
@@ -272,12 +451,15 @@ namespace ego_planner
 
   void EGOReplanFSM::planNextWaypoint(const Eigen::Vector3d next_wp)
   {
+    Eigen::Vector3d wp = next_wp;
+    if (plan_xy_only_)
+      wp(2) = 0.0;
     bool success = false;
-    success = planner_manager_->planGlobalTraj(odom_pos_, odom_vel_, Eigen::Vector3d::Zero(), next_wp, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero());
+    success = planner_manager_->planGlobalTraj(odom_pos_, odom_vel_, Eigen::Vector3d::Zero(), wp, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero());
 
     if (success)
     {
-      end_pt_ = next_wp;
+      end_pt_ = wp;
 
       constexpr double step_size_t = 0.1;
       int i_end = floor(planner_manager_->global_data_.global_duration_ / step_size_t);
@@ -285,6 +467,8 @@ namespace ego_planner
       for (int i = 0; i < i_end; i++)
       {
         gloabl_traj[i] = planner_manager_->global_data_.global_traj_.evaluate(i * step_size_t);
+        if (plan_xy_only_)
+          gloabl_traj[i](2) = 0.0;
       }
 
       end_vel_.setZero();
@@ -333,11 +517,11 @@ namespace ego_planner
   {
     odom_pos_(0) = msg->pose.pose.position.x;
     odom_pos_(1) = msg->pose.pose.position.y;
-    odom_pos_(2) = msg->pose.pose.position.z;
+    odom_pos_(2) = plan_xy_only_ ? 0.0 : msg->pose.pose.position.z;
 
     odom_vel_(0) = msg->twist.twist.linear.x;
     odom_vel_(1) = msg->twist.twist.linear.y;
-    odom_vel_(2) = msg->twist.twist.linear.z;
+    odom_vel_(2) = plan_xy_only_ ? 0.0 : msg->twist.twist.linear.z;
 
     // odom_acc_ = estimateAcc( msg );
 
@@ -761,6 +945,12 @@ namespace ego_planner
     start_pt_ = odom_pos_;
     start_vel_ = odom_vel_;
     start_acc_.setZero();
+    if (plan_xy_only_)
+    {
+      start_pt_(2) = 0.0;
+      start_vel_(2) = 0.0;
+      start_acc_(2) = 0.0;
+    }
 
     bool flag_random_poly_init;
     if (timesOfConsecutiveStateCalls().first == 1)
@@ -790,6 +980,12 @@ namespace ego_planner
     start_pt_ = info->position_traj_.evaluateDeBoorT(t_cur);
     start_vel_ = info->velocity_traj_.evaluateDeBoorT(t_cur);
     start_acc_ = info->acceleration_traj_.evaluateDeBoorT(t_cur);
+    if (plan_xy_only_)
+    {
+      start_pt_(2) = 0.0;
+      start_vel_(2) = 0.0;
+      start_acc_(2) = 0.0;
+    }
 
     bool success = callReboundReplan(false, false);
 
@@ -1004,7 +1200,8 @@ namespace ego_planner
 
   bool EGOReplanFSM::callEmergencyStop(Eigen::Vector3d stop_pos)
   {
-
+    if (plan_xy_only_)
+      stop_pos(2) = 0.0;
     planner_manager_->EmergencyStop(stop_pos);
 
     auto info = &planner_manager_->local_data_;
@@ -1048,6 +1245,8 @@ namespace ego_planner
     for (double t = 0.0; t <= global_duration + 1e-6; t += t_step)
     {
       Eigen::Vector3d pos_t = planner_manager_->global_data_.getPosition(t);
+      if (plan_xy_only_)
+        pos_t(2) = 0.0;
       double dist = (pos_t - start_pt_).norm();
 
       if (dist < dist_min)
@@ -1062,7 +1261,10 @@ namespace ego_planner
     // 从最近点开始向前截取约 7 米的一段作为局部规划的目标路径/引导边界
     const double segment_length = 7.0;
     std::vector<Eigen::Vector3d> segment_pts;
-    segment_pts.push_back(global_data.getPosition(t_closest));
+    Eigen::Vector3d p0 = global_data.getPosition(t_closest);
+    if (plan_xy_only_)
+      p0(2) = 0.0;
+    segment_pts.push_back(p0);
     double arc = 0.0;
     double t_cur = t_closest;
     double t_end = t_closest;
@@ -1071,6 +1273,8 @@ namespace ego_planner
     {
       t_cur = std::min(t_cur + t_step, global_duration);
       Eigen::Vector3d pos_cur = global_data.getPosition(t_cur);
+      if (plan_xy_only_)
+        pos_cur(2) = 0.0;
       arc += (pos_cur - pos_prev).norm();
       pos_prev = pos_cur;
       segment_pts.push_back(pos_cur);
@@ -1080,6 +1284,8 @@ namespace ego_planner
     {
       local_target_pt_ = end_pt_;
       local_target_vel_ = Eigen::Vector3d::Zero();
+      if (plan_xy_only_)
+      { local_target_pt_(2) = 0.0; local_target_vel_(2) = 0.0; }
       planner_manager_->setLocalGuideSegment(std::vector<Eigen::Vector3d>());
       return;
     }
@@ -1087,7 +1293,13 @@ namespace ego_planner
     if ((end_pt_ - local_target_pt_).norm() < (planner_manager_->pp_.max_vel_ * planner_manager_->pp_.max_vel_) / (2 * planner_manager_->pp_.max_acc_))
       local_target_vel_ = Eigen::Vector3d::Zero();
     else
+    {
       local_target_vel_ = global_data.getVelocity(t_end);
+      if (plan_xy_only_)
+        local_target_vel_(2) = 0.0;
+    }
+    if (plan_xy_only_)
+      local_target_pt_(2) = 0.0;
     planner_manager_->setLocalGuideSegment(segment_pts);
   }
 
