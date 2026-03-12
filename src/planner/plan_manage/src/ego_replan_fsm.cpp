@@ -63,7 +63,7 @@ namespace ego_planner
     exec_timer_ = node_->create_wall_timer(std::chrono::milliseconds(10),
                                            std::bind(&EGOReplanFSM::execFSMCallback, this));
 
-    safety_timer_ = node_->create_wall_timer(std::chrono::milliseconds(50),
+    safety_timer_ = node_->create_wall_timer(std::chrono::milliseconds(100),
                                              std::bind(&EGOReplanFSM::checkCollisionCallback, this));
 
     odom_sub_ = node_->create_subscription<nav_msgs::msg::Odometry>(
