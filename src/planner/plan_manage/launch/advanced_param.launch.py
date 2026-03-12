@@ -14,6 +14,8 @@ def generate_launch_description():
     camera_pose_topic = LaunchConfiguration('camera_pose_topic', default='camera_pose')
     depth_topic = LaunchConfiguration('depth_topic', default='depth')
     cloud_topic = LaunchConfiguration('cloud_topic', default='lidar_points')
+
+    frame_id = LaunchConfiguration('frame_id', default='odom')
     
     cx = LaunchConfiguration('cx', default=321.04638671875)
     cy = LaunchConfiguration('cy', default=243.44969177246094)
@@ -58,6 +60,7 @@ def generate_launch_description():
     camera_pose_topic_arg = DeclareLaunchArgument('camera_pose_topic', default_value=camera_pose_topic, description='Camera pose topic')
     depth_topic_arg = DeclareLaunchArgument('depth_topic', default_value=depth_topic, description='Depth topic')
     cloud_topic_arg = DeclareLaunchArgument('cloud_topic', default_value=cloud_topic, description='Point cloud topic')
+    frame_id_arg = DeclareLaunchArgument('frame_id', default_value=frame_id, description='Planning/map frame id (odom/map)')
     cx_arg = DeclareLaunchArgument('cx', default_value=cx, description='Camera intrinsic cx')
     cy_arg = DeclareLaunchArgument('cy', default_value=cy, description='Camera intrinsic cy')
     fx_arg = DeclareLaunchArgument('fx', default_value=fx, description='Camera intrinsic fx')
@@ -110,9 +113,10 @@ def generate_launch_description():
             ('a_star_list', ['drone_', drone_id, '_plan_vis/a_star_list']),
             
             ('grid_map/odom', odometry_topic),
-            ('grid_map/cloud', ['drone_', drone_id, '_', cloud_topic]),
-            ('grid_map/pose', ['drone_', drone_id, '_', camera_pose_topic]),
-            ('grid_map/depth', ['drone_', drone_id, '_', depth_topic]),
+            # 真实机器人常用绝对话题名（如 /lidar_points /depth /camera_pose），不应再拼接 drone_id 前缀
+            ('grid_map/cloud', cloud_topic),
+            ('grid_map/pose', camera_pose_topic),
+            ('grid_map/depth', depth_topic),
             ('grid_map/occupancy_inflate', ['drone_', drone_id, '_grid/grid_map/occupancy_inflate'])
         ],
         parameters=[
@@ -179,7 +183,7 @@ def generate_launch_description():
             {'grid_map/visualization_truncate_height': 2.5},  # 原为1.8，可视化截断显示高度
             {'grid_map/show_occ_time': False},
             {'grid_map/pose_type': pose_type},
-            {'grid_map/frame_id': "head_init"},  # 原为world
+            {'grid_map/frame_id': frame_id},
             # planner manager
             {'manager/max_vel': max_vel},
             {'manager/max_acc': max_acc},
@@ -222,6 +226,7 @@ def generate_launch_description():
     ld.add_action(camera_pose_topic_arg)
     ld.add_action(depth_topic_arg)
     ld.add_action(cloud_topic_arg)
+    ld.add_action(frame_id_arg)
     ld.add_action(cx_arg)
     ld.add_action(cy_arg)
     ld.add_action(fx_arg)

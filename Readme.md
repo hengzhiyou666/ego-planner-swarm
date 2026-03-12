@@ -2,14 +2,14 @@
 
 ## 工程概况
 
-ego-planner-swarm 是一个 **ROS 2（Humble）** 的无人机路径规划与仿真工程，包含：
+本仓库已裁剪为 **ROS 2（Humble）机器狗地面规划版 EGO Planner**，仅保留规划相关功能，包含：
 
 - **规划相关**：ego_planner、plan_env、path_searching、bspline_opt、traj_utils、drone_detect 等
-- **仿真相关**：uav_simulator 下多包（地图、控制、仿真、传感器等）
+- **已删除**：无人机仿真/控制/传感器相关包（原 `uav_simulator/*`）、swarm/仿真 launch 与桥接等非机器狗必需模块
 
-主入口包名为 **ego_planner**，launch 文件在 `src/planner/plan_manage/launch/`。
+主入口包名为 **ego_planner**，launch 文件在 `src/planner/plan_manage/launch/`，推荐仅使用 `robot.launch.py`。
 
-**快速上手**：按顺序完成 **[步骤一：编译](#步骤一编译)** → **[步骤二：终端 1 运行](#步骤二终端-1-运行启动-rviz)** → **[步骤三：终端 2 运行](#步骤三终端-2-运行启动规划与仿真)** 即可运行。
+**快速上手**：完成 **[步骤一：编译](#步骤一编译)** 后，直接运行 **[步骤二：启动机器狗规划](#步骤二启动机器狗规划)**。
 
 ## 是否需要编译？
 
@@ -70,44 +70,25 @@ source install/setup.bash
 
 ---
 
-## 步骤二：终端 1 运行（启动 RViz）
+## 步骤二：启动机器狗规划
 
-> 打开**第一个终端**，执行以下命令启动 RViz 可视化。
-
-```bash
-source /opt/ros/humble/setup.bash
-source /home/hzy/ego-planner-swarm/install/setup.bash
-ros2 launch ego_planner rviz.launch.py
-```
-
----
-
-## 步骤三：终端 2 运行（启动规划与仿真）
-
-> 打开**第二个终端**，先 source 再根据需求选择一种 launch 运行。
+> 打开终端，执行以下命令启动规划器（订阅机器狗里程计/深度/点云话题）。
 
 ```bash
 source /opt/ros/humble/setup.bash
 source /home/hzy/ego-planner-swarm/install/setup.bash
+ros2 launch ego_planner robot.launch.py
 ```
 
-- **单机：**
-  ```bash
-  ros2 launch ego_planner single_run_in_sim.launch.py
-  ```
-- **多机 swarm：**
-  ```bash
-  ros2 launch ego_planner swarm.launch.py
-  ```
-- **大规模 swarm：**
-  ```bash
-  ros2 launch ego_planner swarm_large.launch.py
-  ```
-
-可选参数示例（地图生成方式、是否考虑动力学）：
+常用参数（按你的机器狗话题实际填写）示例：
 
 ```bash
-ros2 launch ego_planner single_run_in_sim.launch.py use_mockamap:=True use_dynamic:=False
+ros2 launch ego_planner robot.launch.py \
+  use_real_robot:=True \
+  odometry_topic:=/odometry \
+  depth_topic:=/depth \
+  cloud_topic:=/lidar_points \
+  pose_type:=2
 ```
 
 ## 小结
@@ -117,6 +98,6 @@ ros2 launch ego_planner single_run_in_sim.launch.py use_mockamap:=True use_dynam
 | 是否需编译 | 是，必须用 `colcon build` 编译工作空间 |
 | 构建命令 | `colcon build`（在工程根目录） |
 | 运行前 | `source install/setup.bash` |
-| 启动方式 | 先 `rviz.launch.py`，再在另一终端用 `single_run_in_sim` / `swarm` / `swarm_large` 等 launch |
+| 启动方式 | `ros2 launch ego_planner robot.launch.py` |
 
 README 里没有写编译步骤，实际使用时要先完成上述编译和 `source install/setup.bash`，再按文档中的 `ros2 launch` 命令运行。

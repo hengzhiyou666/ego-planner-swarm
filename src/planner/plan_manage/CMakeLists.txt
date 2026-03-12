@@ -15,7 +15,6 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
-find_package(quadrotor_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(plan_env REQUIRED)
@@ -59,7 +58,7 @@ add_executable(ego_planner_node
 
 ament_target_dependencies(ego_planner_node 
                           rclcpp nav_msgs visualization_msgs 
-                          geometry_msgs quadrotor_msgs 
+                          geometry_msgs
                           plan_env path_searching 
                           bspline_opt traj_utils 
                           cv_bridge pcl_conversions )
@@ -70,18 +69,9 @@ target_link_libraries(ego_planner_node
     ${TRAJ_UTILS_LIB}
 )
 
-add_executable(traj_server src/traj_server.cpp)
-
-ament_target_dependencies(traj_server 
-                          rclcpp nav_msgs 
-                          visualization_msgs geometry_msgs 
-                          quadrotor_msgs plan_env 
-                          path_searching bspline_opt 
-                          traj_utils cv_bridge pcl_conversions)
-
 # Install targets
 install(
-  TARGETS ego_planner_node traj_server
+  TARGETS ego_planner_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

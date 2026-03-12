@@ -1,11 +1,16 @@
 #include "plan_env/grid_map.h"
 
+#include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
+
 // #define current_img_ md_.depth_image_[image_cnt_ & 1]
 // #define last_img_ md_.depth_image_[!(image_cnt_ & 1)]
 
 void GridMap::initMap(rclcpp::Node::SharedPtr node)
 {
   node_ = node;
+
+  tf_buffer_ = std::make_shared<tf2_ros::Buffer>(node_->get_clock());
+  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
   /* get parameter */
   double x_size, y_size, z_size;
@@ -805,9 +810,35 @@ void GridMap::odomCallback(const nav_msgs::msg::Odometry::SharedPtr odom)
 
 void GridMap::cloudCallback(const sensor_msgs::msg::PointCloud2::ConstPtr &img)
 {
+  sensor_msgs::msg::PointCloud2 cloud_in = *img;
+  sensor_msgs::msg::PointCloud2 cloud_tf;
+
+  // 将点云转换到规划坐标系 mp_.frame_id_（应与 odom/pose/pct_path 同系）
+  if (!cloud_in.header.frame_id.empty() && cloud_in.header.frame_id != mp_.frame_id_)
+  {
+    try
+    {
+      // 用点云时间戳做 TF 查询；若驱动不提供有效 stamp，可在上层修正或改为 TimePointZero
+      geometry_msgs::msg::TransformStamped tf_stamped =
+          tf_buffer_->lookupTransform(mp_.frame_id_, cloud_in.header.frame_id, cloud_in.header.stamp,
+                                      rclcpp::Duration::from_seconds(0.05));
+      tf2::doTransform(cloud_in, cloud_tf, tf_stamped);
+    }
+    catch (const std::exception &e)
+    {
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
+                           "cloud TF failed: %s -> %s, skip cloud. (%s)",
+                           cloud_in.header.frame_id.c_str(), mp_.frame_id_.c_str(), e.what());
+      return;
+    }
+  }
+  else
+  {
+    cloud_tf = cloud_in;
+  }
 
   pcl::PointCloud<pcl::PointXYZ> latest_cloud;
-  pcl::fromROSMsg(*img, latest_cloud);
+  pcl::fromROSMsg(cloud_tf, latest_cloud);
 
   md_.has_cloud_ = true;
 

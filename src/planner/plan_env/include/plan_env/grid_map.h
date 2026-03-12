@@ -24,6 +24,9 @@
 
 #include <plan_env/raycast.h>
 
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+
 #define logit(x) (log((x) / (1 - (x))))
 
 using namespace std;
@@ -251,6 +254,9 @@ private:
 
   rclcpp::TimerBase::SharedPtr occ_timer_;
   rclcpp::TimerBase::SharedPtr vis_timer_;
+
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
   //
   uniform_real_distribution<double> rand_noise_;
