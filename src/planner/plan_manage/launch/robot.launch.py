@@ -11,6 +11,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch.conditions import IfCondition
 
 def generate_launch_description():
+    # =================先记住“我要用哪个参数”，等真正启动时再把实际值塞进来==================
     # ----- 通用参数（保留 drone_id 以复用原有命名空间/话题约定） -----
     drone_id = LaunchConfiguration('drone_id', default=0)
     obj_num = LaunchConfiguration('obj_num', default=10)
@@ -34,36 +35,44 @@ def generate_launch_description():
     fx = LaunchConfiguration('fx', default='805.299072')
     fy = LaunchConfiguration('fy', default='805.879883')
 
+    #=============新建一个“启动计划对象”，后面通过 add_action 添加各种动作（参数、节点、条件等）=======================
     # ----- 声明 Launch 参数 -----
-    ld = LaunchDescription()
-    ld.add_action(DeclareLaunchArgument('drone_id', default_value=drone_id, description='Drone ID'))
-    ld.add_action(DeclareLaunchArgument('obj_num', default_value=obj_num, description='Number of objects'))
-    ld.add_action(DeclareLaunchArgument('map_size_x', default_value=map_size_x, description='Map size X (m)'))
-    ld.add_action(DeclareLaunchArgument('map_size_y', default_value=map_size_y, description='Map size Y (m)'))
-    ld.add_action(DeclareLaunchArgument('map_size_z', default_value=map_size_z, description='Map size Z (m)'))
-    ld.add_action(DeclareLaunchArgument('use_real_robot', default_value=use_real_robot,
+    #声明启动参数 = 提前告诉系统：“这里有一个可以在启动时由用户/上层来决定的设置”，这样以后就能灵活调整，而不用每次都去改代码。
+    launch_plan = LaunchDescription()#新建一个“启动计划对象”，后面通过 add_action 添加各种动作（参数、节点、条件等）
+    launch_plan.add_action(DeclareLaunchArgument('drone_id', default_value=drone_id, description='Drone ID'))#加一个动作，声明一个启动参数
+    launch_plan.add_action(DeclareLaunchArgument('obj_num', default_value=obj_num, description='Number of objects'))
+    launch_plan.add_action(DeclareLaunchArgument('map_size_x', default_value=map_size_x, description='Map size X (m)'))
+    launch_plan.add_action(DeclareLaunchArgument('map_size_y', default_value=map_size_y, description='Map size Y (m)'))
+    launch_plan.add_action(DeclareLaunchArgument('map_size_z', default_value=map_size_z, description='Map size Z (m)'))
+    launch_plan.add_action(DeclareLaunchArgument('use_real_robot', default_value=use_real_robot,
                                         description='True: no map gen, no simulator; use robot topics'))
-    ld.add_action(DeclareLaunchArgument('odometry_topic', default_value=odometry_topic,
+    launch_plan.add_action(DeclareLaunchArgument('odometry_topic', default_value=odometry_topic,
                                         description='Robot odometry topic'))
-    ld.add_action(DeclareLaunchArgument('depth_topic', default_value=depth_topic,
+    launch_plan.add_action(DeclareLaunchArgument('depth_topic', default_value=depth_topic,
                                         description='Depth image topic (e.g. stereo depth)'))
-    ld.add_action(DeclareLaunchArgument('cloud_topic', default_value=cloud_topic,
+    launch_plan.add_action(DeclareLaunchArgument('cloud_topic', default_value=cloud_topic,
                                         description='Point cloud topic'))
-    ld.add_action(DeclareLaunchArgument('camera_pose_topic', default_value=camera_pose_topic,
+    launch_plan.add_action(DeclareLaunchArgument('camera_pose_topic', default_value=camera_pose_topic,
                                         description='Camera pose topic (used when pose_type=1)'))
-    ld.add_action(DeclareLaunchArgument('pose_type', default_value=pose_type,
+    launch_plan.add_action(DeclareLaunchArgument('pose_type', default_value=pose_type,
                                         description='grid_map pose_type: 1=PoseStamped, 2=Odometry'))
-    ld.add_action(DeclareLaunchArgument('frame_id', default_value=frame_id,
+    launch_plan.add_action(DeclareLaunchArgument('frame_id', default_value=frame_id,
                                         description='Planning/map frame id (odom/map)'))
-    ld.add_action(DeclareLaunchArgument('cx', default_value=cx, description='Camera intrinsic cx'))
-    ld.add_action(DeclareLaunchArgument('cy', default_value=cy, description='Camera intrinsic cy'))
-    ld.add_action(DeclareLaunchArgument('fx', default_value=fx, description='Camera intrinsic fx'))
-    ld.add_action(DeclareLaunchArgument('fy', default_value=fy, description='Camera intrinsic fy'))
+    launch_plan.add_action(DeclareLaunchArgument('cx', default_value=cx, description='Camera intrinsic cx'))
+    launch_plan.add_action(DeclareLaunchArgument('cy', default_value=cy, description='Camera intrinsic cy'))
+    launch_plan.add_action(DeclareLaunchArgument('fx', default_value=fx, description='Camera intrinsic fx'))
+    launch_plan.add_action(DeclareLaunchArgument('fy', default_value=fy, description='Camera intrinsic fy'))
+
+    #=======================高级设置说明书advanced_param.launch.py===============================
     # ----- 规划器参数：真实机器狗用机器人话题与相机内参 -----
-    advanced_param_include_real = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            str(get_package_share_directory('ego_planner')) + '/launch/advanced_param.launch.py'),
+    advanced_param_for_real_robot = IncludeLaunchDescription(
+        #PythonLaunchDescriptionSource 是一个“帮你加载别的 .launch.py 文件”的小助手
+        PythonLaunchDescriptionSource(str(get_package_share_directory('ego_planner')) + '/launch/advanced_param.launch.py'),#加载.launch.py
         launch_arguments={
+            #给这本“高级说明书”传的参数列表（下面是规划器相关参数）
+            # “参数名”: “参数值”，这里传的参数值是“我要用哪个参数”，等真正启动时再把实际值塞进来  
+            
+            #可从外部传入的参数：
             'drone_id': drone_id,
             'map_size_x_': map_size_x,
             'map_size_y_': map_size_y,
@@ -76,22 +85,24 @@ def generate_launch_description():
             'cx': cx, 'cy': cy, 'fx': fx, 'fy': fy,
             'pose_type': pose_type,
             'frame_id': frame_id,
-            'max_vel': '2.0', 'max_acc': '6.0', 'planning_horizon': '7.5',
-            'use_distinctive_trajs': 'True', 'flight_type': '3',
-            'plan_xy_only': 'True',
+
+            #规划器参数：不可从外部输入的，该处写好后固定的参数
+            'max_vel': '2.0',  # 规划器允许的最大速度（单位：m/s）
+            'max_acc': '6.0',  # 规划器允许的最大加速度（单位：m/s^2）
+            'planning_horizon': '7.5',  # 规划时间范围，向前看多长时间（单位：秒）
+            'use_distinctive_trajs': 'True',#是否使用独特轨迹（True：使用，False：不使用）#多算几条长得不一样的轨迹，然后从里面挑最好的那一条
+            'egoplanner_input_point_or_path': '3',  # EGO Planner 输入是“单点 / 预设点 / 参考路径”等模式开关
+            'plan_xy_only': 'True',#是否只规划XY平面，不规划Z轴（True：只规划XY平面2维路径，False：规划XYZ 3维路径）
             'point_num': '4',
             'point0_x': '31.2', 'point0_y': '-6.4', 'point0_z': '1.9',
             'point1_x': '33.0', 'point1_y': '-2.5', 'point1_z': '1.9',
             'point2_x': '36.8', 'point2_y': '20.3', 'point2_z': '1.5',
             'point3_x': '39.8', 'point3_y': '41.5', 'point3_z': '1.01',
             'point4_x': '44.4', 'point4_y': '53.2', 'point4_z': '0.9',
-        }.items(),
-        condition=IfCondition(use_real_robot)
+        }.items(),#把字典变成键值对列表
+        condition=IfCondition(use_real_robot)#只有当 use_real_robot 为真（True）的时候，才执行这个 IncludeLaunchDescription；否则就跳过，不加载 advanced_param 那套。
+    
     )
-    ld.add_action(advanced_param_include_real)
+    launch_plan.add_action(advanced_param_for_real_robot)
 
-    # ----- 可选：本地地图加载（发布 PCD 到 /map_generator/global_cloud） -----
-    # 若需从 PCD 加载本地地图，可单独运行 map_loader 或发布 /map_generator/global_cloud；
-    # 此处未内置 map_loader 节点，见 docs/本地地图与机器狗相机配置说明.md
-
-    return ld
+    return launch_plan

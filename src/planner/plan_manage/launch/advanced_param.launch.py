@@ -43,7 +43,7 @@ def generate_launch_description():
     point4_y = LaunchConfiguration('point4_y', default=30.0)
     point4_z = LaunchConfiguration('point4_z', default=1.0)
 
-    flight_type = LaunchConfiguration('flight_type', default=2)
+    egoplanner_input_point_or_path = LaunchConfiguration('egoplanner_input_point_or_path', default=2)
     use_distinctive_trajs = LaunchConfiguration('use_distinctive_trajs', default=True)
     plan_xy_only = LaunchConfiguration('plan_xy_only', default=False)
     
@@ -86,7 +86,10 @@ def generate_launch_description():
     point4_y_arg = DeclareLaunchArgument('point4_y', default_value=point4_y, description='Waypoint 4 Y coordinate')
     point4_z_arg = DeclareLaunchArgument('point4_z', default_value=point4_z, description='Waypoint 4 Z coordinate')
     
-    flight_type_arg = DeclareLaunchArgument('flight_type', default_value=flight_type, description='flight_type')
+    egoplanner_input_point_or_path_arg = DeclareLaunchArgument(
+        'egoplanner_input_point_or_path',
+        default_value=egoplanner_input_point_or_path,
+        description='EGO Planner 输入是“单点 / 预设点 / 路径”等模式')
     use_distinctive_trajs_arg = DeclareLaunchArgument('use_distinctive_trajs', default_value=use_distinctive_trajs, description='Use distinctive trajectories')
     plan_xy_only_arg = DeclareLaunchArgument('plan_xy_only', default_value=plan_xy_only, description='Plan in XY only, force z=0 (e.g. for robot dog)')
     obj_num_set_arg = DeclareLaunchArgument('obj_num_set', default_value=obj_num_set, description='Number of objects')
@@ -120,7 +123,7 @@ def generate_launch_description():
             ('grid_map/occupancy_inflate', ['drone_', drone_id, '_grid/grid_map/occupancy_inflate'])
         ],
         parameters=[
-            {'fsm/flight_type': flight_type},
+            {'fsm/egoplanner_input_point_or_path': egoplanner_input_point_or_path},
             {'fsm/thresh_replan_time': 1.0},
             {'fsm/thresh_no_replan_meter': 1.0},
             {'fsm/planning_horizon': planning_horizon},
@@ -252,7 +255,7 @@ def generate_launch_description():
     ld.add_action(point4_y_arg)
     ld.add_action(point4_z_arg)
     
-    ld.add_action(flight_type_arg)
+    ld.add_action(egoplanner_input_point_or_path_arg)
     ld.add_action(use_distinctive_trajs_arg)
     ld.add_action(plan_xy_only_arg)
     ld.add_action(obj_num_set_arg)

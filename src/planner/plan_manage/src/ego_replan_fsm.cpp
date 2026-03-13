@@ -15,7 +15,7 @@ namespace ego_planner
     have_odom_ = false;
     have_recv_pre_agent_ = false;
 
-    node_->declare_parameter("fsm/flight_type", -1);
+    node_->declare_parameter("fsm/egoplanner_input_point_or_path", -1);
     node_->declare_parameter("fsm/thresh_replan_time", -1.0);
     node_->declare_parameter("fsm/thresh_no_replan_meter", -1.0);
     node_->declare_parameter("fsm/planning_horizon", -1.0);
@@ -25,7 +25,7 @@ namespace ego_planner
     node_->declare_parameter("fsm/fail_safe", true);
     node_->declare_parameter("fsm/plan_xy_only", false);
 
-    node_->get_parameter("fsm/flight_type", target_type_);
+    node_->get_parameter("fsm/egoplanner_input_point_or_path", target_type_);
     node_->get_parameter("fsm/thresh_replan_time", replan_thresh_);
     node_->get_parameter("fsm/thresh_no_replan_meter", no_replan_thresh_);
     node_->get_parameter("fsm/planning_horizon", planning_horizen_);
