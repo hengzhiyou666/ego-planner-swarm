@@ -1218,7 +1218,15 @@ namespace ego_planner
         planner_manager_->reboundReplan(start_pt_, start_vel_, start_acc_, local_target_pt_, local_target_vel_, (have_new_target_ || flag_use_poly_init), flag_randomPolyTraj);
     have_new_target_ = false;
 
-    cout << "refine_success=" << plan_and_refine_success << endl;
+    cout << "refine_success=" << plan_and_refine_success;
+    if (plan_and_refine_success)
+    {
+      cout << "（规划与时间重分配成功，轨迹可行且未碰撞）" << endl;
+    }
+    else
+    {
+      cout << "（规划或时间重分配失败，轨迹不可行或发生碰撞）" << endl;
+    }
 
     if (plan_and_refine_success)
     {
