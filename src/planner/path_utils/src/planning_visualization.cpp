@@ -1,4 +1,4 @@
-#include <traj_utils/planning_visualization.h>
+#include <path_utils/planning_visualization.h>
 
 using std::cout;
 using std::endl;
@@ -155,7 +155,7 @@ namespace ego_planner
     displayMarkerList(global_list_pub, init_pts, scale, color, id);
   }
 
-  void PlanningVisualization::displayMultiInitPathList(vector<vector<Eigen::Vector3d>> init_trajs, const double scale)
+  void PlanningVisualization::displayMultiInitPathList(vector<vector<Eigen::Vector3d>> init_paths, const double scale)
   {
 
     if (init_list_pub->get_subscription_count() == 0)
@@ -174,10 +174,10 @@ namespace ego_planner
     }
     last_nums = 0;
 
-    for (int id = 0; id < init_trajs.size(); id++)
+    for (int id = 0; id < init_paths.size(); id++)
     {
       Eigen::Vector4d color(0, 0, 1, 0.7);
-      displayMarkerList(init_list_pub, init_trajs[id], scale, color, id, false);
+      displayMarkerList(init_list_pub, init_paths[id], scale, color, id, false);
       rclcpp::sleep_for(std::chrono::milliseconds(1));
       last_nums++;
     }

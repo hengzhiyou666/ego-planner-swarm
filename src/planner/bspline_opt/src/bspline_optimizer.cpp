@@ -51,12 +51,12 @@ namespace ego_planner
 
   void BsplineOptimizer::setBsplineInterval(const double &ts) { bspline_interval_ = ts; }
 
-  void BsplineOptimizer::setSwarmTrajs(SwarmTrajData *swarm_trajs_ptr) { swarm_trajs_ = swarm_trajs_ptr; }
+  void BsplineOptimizer::setSwarmPaths(SwarmPathData *swarm_paths_ptr) { swarm_paths_ = swarm_paths_ptr; }
 
   void BsplineOptimizer::setDroneId(const int drone_id) { drone_id_ = drone_id; }
 
   // 返回多个安全的控制点集
-  std::vector<ControlPoints> BsplineOptimizer::distinctiveTrajs(vector<std::pair<int, int>> segments)
+  std::vector<ControlPoints> BsplineOptimizer::distinctivePaths(vector<std::pair<int, int>> segments)
   {
     if (segments.size() == 0) // will be invoked again later.
     {
@@ -185,7 +185,7 @@ namespace ego_planner
           if (RichInfoSegs[i].first.base_point[j].size() != 1)
           {
             cout << "RichInfoSegs[" << i << "].first.base_point[" << j << "].size()=" << RichInfoSegs[i].first.base_point[j].size() << endl;
-            RCLCPP_ERROR(rclcpp::get_logger("distinctiveTrajs"), "Wrong number of base_points!!! Should not be happen!.");
+            RCLCPP_ERROR(rclcpp::get_logger("distinctivePaths"), "Wrong number of base_points!!! Should not be happen!.");
 
             cout << setprecision(5);
             cout << "cps_" << endl;
@@ -195,7 +195,7 @@ namespace ego_planner
             {
               if (cps_.base_point[temp_i].size() > 1 && cps_.base_point[temp_i].size() < 1000)
               {
-                RCLCPP_ERROR(rclcpp::get_logger("distinctiveTrajs"), "Should not happen!!!");
+                RCLCPP_ERROR(rclcpp::get_logger("distinctivePaths"), "Should not happen!!!");
                 cout << "######" << cps_.points.col(temp_i).transpose() << endl;
                 for (size_t temp_j = 0; temp_j < cps_.base_point[temp_i].size(); temp_j++)
                   cout << "      " << cps_.base_point[temp_i][temp_j].transpose() << " @ " << cps_.direction[temp_i][temp_j].transpose() << endl;
@@ -247,7 +247,7 @@ namespace ego_planner
             // 如果找不到则删除这一段
             if (l > l_upbound)
             {
-              RCLCPP_WARN(rclcpp::get_logger("distinctiveTrajs"), "Can't find the new base points at the opposite within the threshold. i=%d, j=%d", i, j);
+              RCLCPP_WARN(rclcpp::get_logger("distinctivePaths"), "Can't find the new base points at the opposite within the threshold. i=%d, j=%d", i, j);
 
               segments.erase(segments.begin() + i);
               RichInfoSegs.erase(RichInfoSegs.begin() + i);
@@ -266,7 +266,7 @@ namespace ego_planner
           // 基点和控制点太近则删除这一段
           else
           {
-            RCLCPP_WARN(rclcpp::get_logger("distinctiveTrajs"), "base_point and control point are too close!");
+            RCLCPP_WARN(rclcpp::get_logger("distinctivePaths"), "base_point and control point are too close!");
             cout << "base_point=" << RichInfoSegs[i].first.base_point[j][0].transpose() << " control point=" << RichInfoSegs[i].first.points.col(j).transpose() << endl;
 
             segments.erase(segments.begin() + i);
@@ -326,7 +326,7 @@ namespace ego_planner
           }
           if (l > l_upbound)
           {
-            RCLCPP_WARN(rclcpp::get_logger("distinctiveTrajs"), 
+            RCLCPP_WARN(rclcpp::get_logger("distinctivePaths"), 
                         "Can't find the new base points at the opposite within the threshold, 2. i=%d", i);
 
             segments.erase(segments.begin() + i);
@@ -342,7 +342,7 @@ namespace ego_planner
         }
         else
         {
-          RCLCPP_WARN(rclcpp::get_logger("distinctiveTrajs"), 
+          RCLCPP_WARN(rclcpp::get_logger("distinctivePaths"), 
                         "base_point and control point are too close!, 2");
           cout << "base_point=" << RichInfoSegs[i].first.base_point[0][0].transpose() << " control point=" << RichInfoSegs[i].first.points.col(0).transpose() << endl;
 
@@ -376,8 +376,8 @@ namespace ego_planner
     std::fill(selection.begin(), selection.end(), 0);
     selection[0] = -1; // init
     // 计算最大组合数
-    int max_traj_nums = static_cast<int>(pow(VARIS, seg_upbound));
-    for (int i = 0; i < max_traj_nums; i++)
+    int max_path_nums = static_cast<int>(pow(VARIS, seg_upbound));
+    for (int i = 0; i < max_path_nums; i++)
     {
       // 2.1 Calculate the selection table.
       int digit_id = 0;
@@ -389,7 +389,7 @@ namespace ego_planner
         digit_id++;
         if (digit_id >= seg_upbound)
         {
-          RCLCPP_ERROR(rclcpp::get_logger("distinctiveTrajs"), 
+          RCLCPP_ERROR(rclcpp::get_logger("distinctivePaths"), 
                         "Should not happen!!! digit_id=%d, seg_upbound=%d", digit_id, seg_upbound);
           
         }
@@ -460,7 +460,7 @@ namespace ego_planner
         }
         else
         {
-          RCLCPP_ERROR(rclcpp::get_logger("distinctiveTrajs"), 
+          RCLCPP_ERROR(rclcpp::get_logger("distinctivePaths"), 
                     "Shold not happen!!!!, cp_id=%d, seg_id=%d, segments.front().first=%d, segments.back().second=%d, segments[seg_id].first=%d, segments[seg_id].second=%d",
                     cp_id, seg_id, segments.front().first, segments.back().second, segments[seg_id].first, segments[seg_id].second);
         }
@@ -883,18 +883,18 @@ namespace ego_planner
     {
       double glb_time = t_now + ((double)(order_ - 1) / 2 + (i - order_ + 1)) * bspline_interval_;
 
-      for (size_t id = 0; id < swarm_trajs_->size(); id++)
+      for (size_t id = 0; id < swarm_paths_->size(); id++)
       {
-        if ((swarm_trajs_->at(id).drone_id != (int)id) || swarm_trajs_->at(id).drone_id == drone_id_)
+        if ((swarm_paths_->at(id).drone_id != (int)id) || swarm_paths_->at(id).drone_id == drone_id_)
         {
           continue;
         }
 
-        double traj_i_satrt_time = swarm_trajs_->at(id).start_time_.seconds();
-        if (glb_time < traj_i_satrt_time + swarm_trajs_->at(id).duration_ - 0.1)
+        double path_i_start_time = swarm_paths_->at(id).start_time_.seconds();
+        if (glb_time < path_i_start_time + swarm_paths_->at(id).duration_ - 0.1)
         {
           /* def cost=(c-sqrt([Q-O]'D[Q-O]))^2, D=[1/b^2,0,0;0,1/b^2,0;0,0,1/a^2] */
-          Eigen::Vector3d swarm_prid = swarm_trajs_->at(id).position_traj_.evaluateDeBoorT(glb_time - traj_i_satrt_time);
+          Eigen::Vector3d swarm_prid = swarm_paths_->at(id).position_path_.evaluateDeBoorT(glb_time - path_i_start_time);
           Eigen::Vector3d dist_vec = cps_.points.col(i) - swarm_prid;
           double ellip_dist = sqrt(dist_vec(2) * dist_vec(2) * inv_a2 + (dist_vec(0) * dist_vec(0) + dist_vec(1) * dist_vec(1)) * inv_b2);
           double dist_err = CLEARANCE - ellip_dist;
@@ -1494,7 +1494,7 @@ namespace ego_planner
   }
 
   // 设置时间间隔ts，调用rebound_optimize(final_cost)将轨迹推出障碍物，得到最优的无碰撞轨迹，并将其控制点赋值给optimal_points
-  bool BsplineOptimizer::BsplineOptimizeTrajRebound(Eigen::MatrixXd &optimal_points, double ts)
+  bool BsplineOptimizer::BsplineOptimizePathRebound(Eigen::MatrixXd &optimal_points, double ts)
   {
     setBsplineInterval(ts);
 
@@ -1508,7 +1508,7 @@ namespace ego_planner
 
   // 设置初始控制点control_points、时间间隔ts，调用rebound_optimize(final_cost)将轨迹推出障碍物，
   // 得到最优的无碰撞轨迹，并将其控制点赋值给optimal_points
-  bool BsplineOptimizer::BsplineOptimizeTrajRebound(Eigen::MatrixXd &optimal_points, double &final_cost, const ControlPoints &control_points, double ts)
+  bool BsplineOptimizer::BsplineOptimizePathRebound(Eigen::MatrixXd &optimal_points, double &final_cost, const ControlPoints &control_points, double ts)
   {
     // 将时间间隔存储到成员变量
     setBsplineInterval(ts);
@@ -1523,7 +1523,7 @@ namespace ego_planner
   }
 
   // 设置初始控制点init_points、时间间隔ts，调用refine_optimize()重新分配时间，得到最优的动力学可行轨迹，并将其控制点赋值给optimal_points
-  bool BsplineOptimizer::BsplineOptimizeTrajRefine(const Eigen::MatrixXd &init_points, const double ts, Eigen::MatrixXd &optimal_points)
+  bool BsplineOptimizer::BsplineOptimizePathRefine(const Eigen::MatrixXd &init_points, const double ts, Eigen::MatrixXd &optimal_points)
   {
 
     // 将控制点数据存储到成员变量
@@ -1607,19 +1607,19 @@ namespace ego_planner
 
         /*** collision check, phase 2 ***/
         // 创建均匀的B样条曲线
-        UniformBspline traj = UniformBspline(cps_.points, 3, bspline_interval_);
+        UniformBspline path = UniformBspline(cps_.points, 3, bspline_interval_);
         // 开始时间，结束时间
         double tm, tmp;
-        traj.getTimeSpan(tm, tmp);
+        path.getTimeSpan(tm, tmp);
         // 计算时间步长
-        double t_step = (tmp - tm) / ((traj.evaluateDeBoorT(tmp) - traj.evaluateDeBoorT(tm)).norm() / grid_map_->getResolution());
-        // 遍历轨迹的前2/3部分进行障碍物检测
-        for (double t = tm; t < tmp * 2 / 3; t += t_step) // Only check the closest 2/3 partition of the whole trajectory.
+        double t_step = (tmp - tm) / ((path.evaluateDeBoorT(tmp) - path.evaluateDeBoorT(tm)).norm() / grid_map_->getResolution());
+        // 遍历路径的前2/3部分进行障碍物检测
+        for (double t = tm; t < tmp * 2 / 3; t += t_step) // Only check the closest 2/3 partition of the whole path.
         {
-          flag_occ = grid_map_->getInflateOccupancy(traj.evaluateDeBoorT(t));
+          flag_occ = grid_map_->getInflateOccupancy(path.evaluateDeBoorT(t));
           if (flag_occ)
           {
-            // cout << "hit_obs, t=" << t << " P=" << traj.evaluateDeBoorT(t).transpose() << endl;
+            // cout << "hit_obs, t=" << t << " P=" << path.evaluateDeBoorT(t).transpose() << endl;
 
             // 如果在前三个控制点范围内检测到了碰撞则视为不可行
             if (t <= bspline_interval_) // First 3 control points in obstacles!
@@ -1642,7 +1642,7 @@ namespace ego_planner
 // #define USE_SECOND_CLEARENCE_CHECK
 #ifdef USE_SECOND_CLEARENCE_CHECK
         bool flag_cls_xyp, flag_cls_xyn, flag_cls_zp, flag_cls_zn;
-        Eigen::Vector3d start_end_vec = traj.evaluateDeBoorT(tmp) - traj.evaluateDeBoorT(tm);
+        Eigen::Vector3d start_end_vec = path.evaluateDeBoorT(tmp) - path.evaluateDeBoorT(tm);
         Eigen::Vector3d offset_xy(-start_end_vec(0), start_end_vec(1), 0);
         offset_xy.normalize();
         Eigen::Vector3d offset_z = start_end_vec.cross(offset_xy);
@@ -1759,16 +1759,16 @@ namespace ego_planner
                                         "Solver error in refining!, return = %d, %s", result, lbfgs::lbfgs_strerror(result));
       }
 
-      // 使用优化后的控制点创建新的轨迹
-      UniformBspline traj = UniformBspline(cps_.points, 3, bspline_interval_);
+      // 使用优化后的控制点创建新的路径
+      UniformBspline path = UniformBspline(cps_.points, 3, bspline_interval_);
       double tm, tmp;
-      traj.getTimeSpan(tm, tmp);
-      double t_step = (tmp - tm) / ((traj.evaluateDeBoorT(tmp) - traj.evaluateDeBoorT(tm)).norm() / grid_map_->getResolution()); // Step size is defined as the maximum size that can passes throgth every gird.
+      path.getTimeSpan(tm, tmp);
+      double t_step = (tmp - tm) / ((path.evaluateDeBoorT(tmp) - path.evaluateDeBoorT(tm)).norm() / grid_map_->getResolution()); // Step size is defined as the maximum size that can passes throgth every gird.
       for (double t = tm; t < tmp * 2 / 3; t += t_step)
       {
-        if (grid_map_->getInflateOccupancy(traj.evaluateDeBoorT(t)))
+        if (grid_map_->getInflateOccupancy(path.evaluateDeBoorT(t)))
         {
-          // cout << "Refined traj hit_obs, t=" << t << " P=" << traj.evaluateDeBoorT(t).transpose() << endl;
+          // cout << "Refined path hit_obs, t=" << t << " P=" << path.evaluateDeBoorT(t).transpose() << endl;
 
           // 将ref_pts存储为矩阵形式
           Eigen::MatrixXd ref_pts(ref_pts_.size(), 3);

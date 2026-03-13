@@ -8,7 +8,7 @@
 #include <plan_env/obj_predictor.h>
 #include <rclcpp/rclcpp.hpp>
 #include "bspline_opt/lbfgs.hpp"
-#include <traj_utils/plan_container.hpp>
+#include <path_utils/plan_container.hpp>
 
 // Gradient and elasitc band optimization
 
@@ -101,7 +101,7 @@ namespace ego_planner
     // required inputs
     void setControlPoints(const Eigen::MatrixXd &points);
     void setBsplineInterval(const double &ts);
-    void setSwarmTrajs(SwarmTrajData *swarm_trajs_ptr);
+    void setSwarmPaths(SwarmPathData *swarm_paths_ptr);
     void setDroneId(const int drone_id);
 
     // optional inputs
@@ -117,11 +117,11 @@ namespace ego_planner
     AStar::Ptr a_star_;
     std::vector<Eigen::Vector3d> ref_pts_;
 
-    std::vector<ControlPoints> distinctiveTrajs(vector<std::pair<int, int>> segments);
+    std::vector<ControlPoints> distinctivePaths(vector<std::pair<int, int>> segments);
     std::vector<std::pair<int, int>> initControlPoints(Eigen::MatrixXd &init_points, bool flag_first_init = true);
-    bool BsplineOptimizeTrajRebound(Eigen::MatrixXd &optimal_points, double ts); // must be called after initControlPoints()
-    bool BsplineOptimizeTrajRebound(Eigen::MatrixXd &optimal_points, double &final_cost, const ControlPoints &control_points, double ts);
-    bool BsplineOptimizeTrajRefine(const Eigen::MatrixXd &init_points, const double ts, Eigen::MatrixXd &optimal_points);
+    bool BsplineOptimizePathRebound(Eigen::MatrixXd &optimal_points, double ts); // must be called after initControlPoints()
+    bool BsplineOptimizePathRebound(Eigen::MatrixXd &optimal_points, double &final_cost, const ControlPoints &control_points, double ts);
+    bool BsplineOptimizePathRefine(const Eigen::MatrixXd &init_points, const double ts, Eigen::MatrixXd &optimal_points);
 
     inline int getOrder(void) { return order_; }
     inline double getSwarmClearance(void) { return swarm_clearance_; }
@@ -129,7 +129,7 @@ namespace ego_planner
   private:
     GridMap::Ptr grid_map_;
     fast_planner::ObjPredictor::Ptr moving_objs_;
-    SwarmTrajData *swarm_trajs_{NULL}; // Can not use shared_ptr and no need to free
+    SwarmPathData *swarm_paths_{NULL}; // Can not use shared_ptr and no need to free
     int drone_id_;
 
     enum FORCE_STOP_OPTIMIZE_TYPE

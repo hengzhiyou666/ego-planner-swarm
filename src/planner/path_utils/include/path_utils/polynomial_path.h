@@ -1,12 +1,12 @@
-#ifndef _POLYNOMIAL_TRAJ_H
-#define _POLYNOMIAL_TRAJ_H
+#ifndef _POLYNOMIAL_PATH_H
+#define _POLYNOMIAL_PATH_H
 
 #include <Eigen/Eigen>
 #include <vector>
 
 using std::vector;
 
-class PolynomialTraj
+class PolynomialPath
 {
 private:
   vector<double> times;       // time of each segment
@@ -18,14 +18,14 @@ private:
   int num_seg;
 
   /* evaluation */
-  vector<Eigen::Vector3d> traj_vec3d;
+  vector<Eigen::Vector3d> path_vec3d;
   double length;
 
 public:
-  PolynomialTraj(/* args */)
+  PolynomialPath(/* args */)
   {
   }
-  ~PolynomialTraj()
+  ~PolynomialPath()
   {
   }
 
@@ -159,33 +159,33 @@ public:
     return acc;
   }
 
-  /* for evaluating traj, should be called in sequence!!! */
+  /* for evaluating path, should be called in sequence!!! */
   double getTimeSum()
   {
     return this->time_sum;
   }
 
-  vector<Eigen::Vector3d> getTraj()
+  vector<Eigen::Vector3d> getPath()
   {
     double eval_t = 0.0;
-    traj_vec3d.clear();
+    path_vec3d.clear();
     while (eval_t < time_sum)
     {
       Eigen::Vector3d pt = evaluate(eval_t);
-      traj_vec3d.push_back(pt);
+      path_vec3d.push_back(pt);
       eval_t += 0.01;
     }
-    return traj_vec3d;
+    return path_vec3d;
   }
 
   double getLength()
   {
     length = 0.0;
 
-    Eigen::Vector3d p_l = traj_vec3d[0], p_n;
-    for (int i = 1; i < traj_vec3d.size(); ++i)
+    Eigen::Vector3d p_l = path_vec3d[0], p_n;
+    for (int i = 1; i < path_vec3d.size(); ++i)
     {
-      p_n = traj_vec3d[i];
+      p_n = path_vec3d[i];
       length += (p_n - p_l).norm();
       p_l = p_n;
     }
@@ -324,11 +324,11 @@ public:
     mean_a = mean_a / double(num);
   }
 
-  static PolynomialTraj minSnapTraj(const Eigen::MatrixXd &Pos, const Eigen::Vector3d &start_vel,
+  static PolynomialPath minSnapPath(const Eigen::MatrixXd &Pos, const Eigen::Vector3d &start_vel,
                                     const Eigen::Vector3d &end_vel, const Eigen::Vector3d &start_acc,
                                     const Eigen::Vector3d &end_acc, const Eigen::VectorXd &Time);
 
-  static PolynomialTraj one_segment_traj_gen(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
+  static PolynomialPath one_segment_path_gen(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
                                              const Eigen::Vector3d &end_pt, const Eigen::Vector3d &end_vel, const Eigen::Vector3d &end_acc,
                                              double t);
 };

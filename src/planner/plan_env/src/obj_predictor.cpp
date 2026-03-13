@@ -83,8 +83,8 @@ namespace fast_planner
     this->get_parameter("prediction/queue_size", queue_size);
     this->get_parameter("prediction/skip_nums", skip_nums);
 
-    predict_trajs_.reset(new vector<PolynomialPrediction>);
-    predict_trajs_->resize(obj_num_);
+    predict_paths_.reset(new vector<PolynomialPrediction>);
+    predict_paths_->resize(obj_num_);
 
     obj_scale_.reset(new vector<Eigen::Vector3d>);
     obj_scale_->resize(obj_num_);
@@ -107,7 +107,7 @@ namespace fast_planner
 
       pose_subs_.push_back(pose_sub);
 
-      predict_trajs_->at(i).setGlobalStartTime(t_now);
+      predict_paths_->at(i).setGlobalStartTime(t_now);
     }
 
     marker_sub_ = this->create_subscription<visualization_msgs::msg::Marker>(
@@ -121,7 +121,7 @@ namespace fast_planner
 
   ObjPrediction ObjPredictor::getPredictionTraj()
   {
-    return this->predict_trajs_;
+    return this->predict_paths_;
   }
 
   ObjScale ObjPredictor::getObjScale()
@@ -189,8 +189,8 @@ namespace fast_planner
       }
 
       /* ---------- update prediction container ---------- */
-      predict_trajs_->at(i).setPolynomial(pm);
-      predict_trajs_->at(i).setTime(t1, t2);
+      predict_paths_->at(i).setPolynomial(pm);
+      predict_paths_->at(i).setTime(t1, t2);
     }
   }
 
@@ -278,8 +278,8 @@ namespace fast_planner
       //   cout << "polys=" << polys[0].transpose() << endl;
       // }
 
-      predict_trajs_->at(i).setPolynomial(polys);
-      predict_trajs_->at(i).setTime(t1, t2);
+      predict_paths_->at(i).setPolynomial(polys);
+      predict_paths_->at(i).setTime(t1, t2);
     }
   }
 
@@ -287,7 +287,7 @@ namespace fast_planner
   {
     if (obj_id < obj_num_)
     {
-      return predict_trajs_->at(obj_id).evaluate(time);
+      return predict_paths_->at(obj_id).evaluate(time);
     }
 
     double MAX = std::numeric_limits<double>::max();
@@ -298,7 +298,7 @@ namespace fast_planner
   {
     if (obj_id < obj_num_)
     {
-      return predict_trajs_->at(obj_id).evaluateConstVel(time);
+      return predict_paths_->at(obj_id).evaluateConstVel(time);
     }
 
     double MAX = std::numeric_limits<double>::max();

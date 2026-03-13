@@ -20,7 +20,7 @@ find_package(visualization_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(plan_env REQUIRED)
-find_package(traj_utils REQUIRED)
+find_package(path_utils REQUIRED)
 find_package(path_searching REQUIRED)
 
 find_package(PCL REQUIRED)
@@ -59,7 +59,7 @@ ament_target_dependencies(bspline_opt
                           nav_msgs cv_bridge 
                           rclcpp Eigen3 
                           PCL pcl_conversions 
-                          plan_env traj_utils path_searching)
+                          plan_env path_utils path_searching)
 
 
 install(TARGETS bspline_opt

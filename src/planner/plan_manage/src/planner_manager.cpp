@@ -30,7 +30,7 @@ namespace ego_planner
     node->get_parameter("manager/try_more_paths_and_choose_best", pp_.try_more_paths_and_choose_best);
     node->get_parameter("manager/drone_id", pp_.drone_id);
 
-    local_data_.traj_id_ = 0;
+    local_data_.path_id_ = 0;
     grid_map_.reset(new GridMap);
     // grid_map_->initMap(nh);
     grid_map_->initMap(node);
@@ -98,7 +98,7 @@ namespace ego_planner
         else
         {
         // 用于存储生成的轨迹
-        PolynomialTraj gl_traj;
+        PolynomialPath gl_path;
 
         double dist = (start_pt - local_target_pt).norm();
         // 判断 速度的平方/加速度 是否大于dist，并决定如何计算时间
@@ -107,7 +107,7 @@ namespace ego_planner
         if (!flag_randomPolyTraj)
         // false生成一段单一的多项式轨迹，true生成一个包含随机插入点的轨迹
         {
-          gl_traj = PolynomialTraj::one_segment_traj_gen(start_pt, start_vel, start_acc, local_target_pt, local_target_vel, Eigen::Vector3d::Zero(), time);
+          gl_path = PolynomialPath::one_segment_path_gen(start_pt, start_vel, start_acc, local_target_pt, local_target_vel, Eigen::Vector3d::Zero(), time);
         }
         else
         {
@@ -122,7 +122,7 @@ namespace ego_planner
           pos.col(2) = local_target_pt;
           Eigen::VectorXd t(2);
           t(0) = t(1) = time / 2;
-          gl_traj = PolynomialTraj::minSnapTraj(pos, start_vel, local_target_vel, start_acc, Eigen::Vector3d::Zero(), t);
+          gl_path = PolynomialPath::minSnapPath(pos, start_vel, local_target_vel, start_acc, Eigen::Vector3d::Zero(), t);
         }
 
         double t;
@@ -133,10 +133,10 @@ namespace ego_planner
           ts /= 1.5;
           point_set.clear();
           flag_too_far = false;
-          Eigen::Vector3d last_pt = gl_traj.evaluate(0);
+          Eigen::Vector3d last_pt = gl_path.evaluate(0);
           for (t = 0; t < time; t += ts)
           {
-            Eigen::Vector3d pt = gl_traj.evaluate(t);
+            Eigen::Vector3d pt = gl_path.evaluate(t);
             if ((last_pt - pt).norm() > pp_.ctrl_pt_dist * 1.5)
             {
               flag_too_far = true;
@@ -147,10 +147,10 @@ namespace ego_planner
           }
         } while (flag_too_far || point_set.size() < 7); // To make sure the initial path has enough points.
         t -= ts;
-        start_end_derivatives.push_back(gl_traj.evaluateVel(0));
+        start_end_derivatives.push_back(gl_path.evaluateVel(0));
         start_end_derivatives.push_back(local_target_vel);
-        start_end_derivatives.push_back(gl_traj.evaluateAcc(0));
-        start_end_derivatives.push_back(gl_traj.evaluateAcc(t));
+        start_end_derivatives.push_back(gl_path.evaluateAcc(0));
+        start_end_derivatives.push_back(gl_path.evaluateAcc(t));
         }
       }
       else // Initial path generated from previous trajectory.
@@ -164,7 +164,7 @@ namespace ego_planner
         pseudo_arc_length.push_back(0.0);
         for (t = t_cur; t < local_data_.duration_ + 1e-3; t += ts)
         {
-          segment_point.push_back(local_data_.position_traj_.evaluateDeBoorT(t));
+          segment_point.push_back(local_data_.position_path_.evaluateDeBoorT(t));
           if (t > t_cur)
           {
             pseudo_arc_length.push_back((segment_point.back() - segment_point[segment_point.size() - 2]).norm() + pseudo_arc_length.back());
@@ -172,19 +172,19 @@ namespace ego_planner
         }
         t -= ts;
 
-        double poly_time = (local_data_.position_traj_.evaluateDeBoorT(t) - local_target_pt).norm() / pp_.max_vel_ * 2;
+        double poly_time = (local_data_.position_path_.evaluateDeBoorT(t) - local_target_pt).norm() / pp_.max_vel_ * 2;
         if (poly_time > ts)
         {
-          PolynomialTraj gl_traj = PolynomialTraj::one_segment_traj_gen(local_data_.position_traj_.evaluateDeBoorT(t),
-                                                                        local_data_.velocity_traj_.evaluateDeBoorT(t),
-                                                                        local_data_.acceleration_traj_.evaluateDeBoorT(t),
+          PolynomialPath gl_path = PolynomialPath::one_segment_path_gen(local_data_.position_path_.evaluateDeBoorT(t),
+                                                                        local_data_.velocity_path_.evaluateDeBoorT(t),
+                                                                        local_data_.acceleration_path_.evaluateDeBoorT(t),
                                                                         local_target_pt, local_target_vel, Eigen::Vector3d::Zero(), poly_time);
 
           for (t = ts; t < poly_time; t += ts)
           {
             if (!pseudo_arc_length.empty())
             {
-              segment_point.push_back(gl_traj.evaluate(t));
+              segment_point.push_back(gl_path.evaluate(t));
               pseudo_arc_length.push_back((segment_point.back() - segment_point[segment_point.size() - 2]).norm() + pseudo_arc_length.back());
             }
             else
@@ -219,9 +219,9 @@ namespace ego_planner
           point_set.push_back(local_target_pt);
         } while (point_set.size() < 7); // If the start point is very close to end point, this will help
 
-        start_end_derivatives.push_back(local_data_.velocity_traj_.evaluateDeBoorT(t_cur));
+        start_end_derivatives.push_back(local_data_.velocity_path_.evaluateDeBoorT(t_cur));
         start_end_derivatives.push_back(local_target_vel);
-        start_end_derivatives.push_back(local_data_.acceleration_traj_.evaluateDeBoorT(t_cur));
+        start_end_derivatives.push_back(local_data_.acceleration_path_.evaluateDeBoorT(t_cur));
         start_end_derivatives.push_back(Eigen::Vector3d::Zero());
 
         if (point_set.size() > pp_.planning_horizen_ / pp_.ctrl_pt_dist * 3) // The initial path is unnormally too long!
@@ -245,22 +245,22 @@ namespace ego_planner
 
     /*** STEP 2: OPTIMIZE ***/
     bool flag_step_1_success = false;
-    vector<vector<Eigen::Vector3d>> vis_trajs;
+    vector<vector<Eigen::Vector3d>> vis_paths;
 
     if (pp_.try_more_paths_and_choose_best)
     {
       // cout << "enter" << endl;
-      std::vector<ControlPoints> trajs = bspline_optimizer_->distinctiveTrajs(segments);
+      std::vector<ControlPoints> paths = bspline_optimizer_->distinctivePaths(segments);
       cout << "\033[1;33m"
-           << "multi-trajs=" << trajs.size() << "\033[1;0m" << endl;
+           << "multi-paths=" << paths.size() << "\033[1;0m" << endl;
 
       double final_cost, min_cost = 999999.0;
-      for (int i = trajs.size() - 1; i >= 0; i--)
+      for (int i = paths.size() - 1; i >= 0; i--)
       {
-        if (bspline_optimizer_->BsplineOptimizeTrajRebound(ctrl_pts_temp, final_cost, trajs[i], ts))
+        if (bspline_optimizer_->BsplineOptimizePathRebound(ctrl_pts_temp, final_cost, paths[i], ts))
         {
 
-          cout << "traj " << trajs.size() - i << " success." << endl;
+          cout << "path " << paths.size() - i << " success." << endl;
 
           flag_step_1_success = true;
           if (final_cost < min_cost)
@@ -275,21 +275,21 @@ namespace ego_planner
           {
             point_set.push_back(ctrl_pts_temp.col(j));
           }
-          vis_trajs.push_back(point_set);
+          vis_paths.push_back(point_set);
         }
         else
         {
-          cout << "traj " << trajs.size() - i << " failed." << endl;
+          cout << "path " << paths.size() - i << " failed." << endl;
         }
       }
 
       t_opt = rclcpp::Clock().now() - t_start;
 
-      visualization_->displayMultiInitPathList(vis_trajs, 0.2);
+      visualization_->displayMultiInitPathList(vis_paths, 0.2);
     }
     else
     {
-      flag_step_1_success = bspline_optimizer_->BsplineOptimizeTrajRebound(ctrl_pts, ts);
+      flag_step_1_success = bspline_optimizer_->BsplineOptimizePathRebound(ctrl_pts, ts);
       t_opt = rclcpp::Clock().now() - t_start;
       // static int vis_id = 0;
       visualization_->displayInitPathList(point_set, 0.2, 0);
@@ -320,7 +320,7 @@ namespace ego_planner
         cout << "Need to reallocate time." << endl;
 
         Eigen::MatrixXd optimal_control_points;
-        flag_step_2_success = refineTrajAlgo(pos, start_end_derivatives, ratio, ts, optimal_control_points);
+        flag_step_2_success = refinePathAlgo(pos, start_end_derivatives, ratio, ts, optimal_control_points);
         if (flag_step_2_success)
           pos = UniformBspline(optimal_control_points, 3, ts);
       }
@@ -346,7 +346,7 @@ namespace ego_planner
     t_refine = rclcpp::Clock().now() - t_start;
 
     // save planned results
-    updateTrajInfo(pos, rclcpp::Clock().now());
+    updatePathInfo(pos, rclcpp::Clock().now());
 
     static double sum_time = 0;
     static int count_success = 0;
@@ -371,7 +371,7 @@ namespace ego_planner
       control_points.col(i) = stop_pos;
     }
 
-    updateTrajInfo(UniformBspline(control_points, 3, 1.0), rclcpp::Clock().now());
+    updatePathInfo(UniformBspline(control_points, 3, 1.0), rclcpp::Clock().now());
 
     return true;
   }
@@ -383,16 +383,16 @@ namespace ego_planner
       return false;
 
     // double my_traj_start_time = local_data_.start_time_.toSec();
-    // double other_traj_start_time = swarm_trajs_buf_[drone_id].start_time_.toSec();
-    double my_traj_start_time = local_data_.start_time_.seconds();
-    double other_traj_start_time = swarm_trajs_buf_[drone_id].start_time_.seconds();
+    // double other_traj_start_time = swarm_paths_buf_[drone_id].start_time_.toSec();
+    double my_path_start_time = local_data_.start_time_.seconds();
+    double other_path_start_time = swarm_paths_buf_[drone_id].start_time_.seconds();
 
-    double t_start = max(my_traj_start_time, other_traj_start_time);
-    double t_end = min(my_traj_start_time + local_data_.duration_ * 2 / 3, other_traj_start_time + swarm_trajs_buf_[drone_id].duration_);
+    double t_start = max(my_path_start_time, other_path_start_time);
+    double t_end = min(my_path_start_time + local_data_.duration_ * 2 / 3, other_path_start_time + swarm_paths_buf_[drone_id].duration_);
 
     for (double t = t_start; t < t_end; t += 0.03)
     {
-      if ((local_data_.position_traj_.evaluateDeBoorT(t - my_traj_start_time) - swarm_trajs_buf_[drone_id].position_traj_.evaluateDeBoorT(t - other_traj_start_time)).norm() < bspline_optimizer_->getSwarmClearance())
+      if ((local_data_.position_path_.evaluateDeBoorT(t - my_path_start_time) - swarm_paths_buf_[drone_id].position_path_.evaluateDeBoorT(t - other_path_start_time)).norm() < bspline_optimizer_->getSwarmClearance())
       {
         return true;
       }
@@ -401,7 +401,7 @@ namespace ego_planner
     return false;
   }
 
-  bool EGOPlannerManager::planGlobalTrajWaypoints(const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
+  bool EGOPlannerManager::planGlobalPathWaypoints(const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
                                                   const std::vector<Eigen::Vector3d> &waypoints, const Eigen::Vector3d &end_vel, const Eigen::Vector3d &end_acc)
   {
 
@@ -461,22 +461,22 @@ namespace ego_planner
     time(0) *= 2.0;
     time(time.rows() - 1) *= 2.0;
 
-    PolynomialTraj gl_traj;
+    PolynomialPath gl_path;
     if (pos.cols() >= 3)
-      gl_traj = PolynomialTraj::minSnapTraj(pos, start_vel, end_vel, start_acc, end_acc, time);
+      gl_path = PolynomialPath::minSnapPath(pos, start_vel, end_vel, start_acc, end_acc, time);
     else if (pos.cols() == 2)
-      gl_traj = PolynomialTraj::one_segment_traj_gen(start_pos, start_vel, start_acc, pos.col(1), end_vel, end_acc, time(0));
+      gl_path = PolynomialPath::one_segment_path_gen(start_pos, start_vel, start_acc, pos.col(1), end_vel, end_acc, time(0));
     else
       return false;
 
     auto time_now = rclcpp::Clock().now();
 
-    global_data_.setGlobalTraj(gl_traj, time_now);
+    global_data_.setGlobalPath(gl_path, time_now);
 
     return true;
   }
 
-  bool EGOPlannerManager::planGlobalTraj(const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
+  bool EGOPlannerManager::planGlobalPath(const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
                                          const Eigen::Vector3d &end_pos, const Eigen::Vector3d &end_vel, const Eigen::Vector3d &end_acc)
   {
 
@@ -528,51 +528,51 @@ namespace ego_planner
     time(0) *= 2.0;
     time(time.rows() - 1) *= 2.0;
 
-    PolynomialTraj gl_traj;
+    PolynomialPath gl_path;
     if (pos.cols() >= 3)
-      gl_traj = PolynomialTraj::minSnapTraj(pos, start_vel, end_vel, start_acc, end_acc, time);
+      gl_path = PolynomialPath::minSnapPath(pos, start_vel, end_vel, start_acc, end_acc, time);
     else if (pos.cols() == 2)
-      gl_traj = PolynomialTraj::one_segment_traj_gen(start_pos, start_vel, start_acc, end_pos, end_vel, end_acc, time(0));
+      gl_path = PolynomialPath::one_segment_path_gen(start_pos, start_vel, start_acc, end_pos, end_vel, end_acc, time(0));
     else
       return false;
 
     auto time_now = rclcpp::Clock().now();
 
-    global_data_.setGlobalTraj(gl_traj, time_now);
+    global_data_.setGlobalPath(gl_path, time_now);
 
     return true;
   }
 
-  bool EGOPlannerManager::refineTrajAlgo(UniformBspline &traj, vector<Eigen::Vector3d> &start_end_derivative, double ratio, double &ts, Eigen::MatrixXd &optimal_control_points)
+  bool EGOPlannerManager::refinePathAlgo(UniformBspline &path, vector<Eigen::Vector3d> &start_end_derivative, double ratio, double &ts, Eigen::MatrixXd &optimal_control_points)
   {
     double t_inc;
 
-    Eigen::MatrixXd ctrl_pts; // = traj.getControlPoint()
+    Eigen::MatrixXd ctrl_pts; // = path.getControlPoint()
 
     // std::cout << "ratio: " << ratio << std::endl;
-    reparamBspline(traj, start_end_derivative, ratio, ctrl_pts, ts, t_inc);
+    reparamBspline(path, start_end_derivative, ratio, ctrl_pts, ts, t_inc);
 
-    traj = UniformBspline(ctrl_pts, 3, ts);
+    path = UniformBspline(ctrl_pts, 3, ts);
 
-    double t_step = traj.getTimeSum() / (ctrl_pts.cols() - 3);
+    double t_step = path.getTimeSum() / (ctrl_pts.cols() - 3);
     bspline_optimizer_->ref_pts_.clear();
-    for (double t = 0; t < traj.getTimeSum() + 1e-4; t += t_step)
-      bspline_optimizer_->ref_pts_.push_back(traj.evaluateDeBoorT(t));
+    for (double t = 0; t < path.getTimeSum() + 1e-4; t += t_step)
+      bspline_optimizer_->ref_pts_.push_back(path.evaluateDeBoorT(t));
 
-    bool success = bspline_optimizer_->BsplineOptimizeTrajRefine(ctrl_pts, ts, optimal_control_points);
+    bool success = bspline_optimizer_->BsplineOptimizePathRefine(ctrl_pts, ts, optimal_control_points);
 
     return success;
   }
 
-  void EGOPlannerManager::updateTrajInfo(const UniformBspline &position_traj, const rclcpp::Time time_now)
+  void EGOPlannerManager::updatePathInfo(const UniformBspline &position_path, const rclcpp::Time time_now)
   {
     local_data_.start_time_ = time_now;
-    local_data_.position_traj_ = position_traj;
-    local_data_.velocity_traj_ = local_data_.position_traj_.getDerivative();
-    local_data_.acceleration_traj_ = local_data_.velocity_traj_.getDerivative();
-    local_data_.start_pos_ = local_data_.position_traj_.evaluateDeBoorT(0.0);
-    local_data_.duration_ = local_data_.position_traj_.getTimeSum();
-    local_data_.traj_id_ += 1;
+    local_data_.position_path_ = position_path;
+    local_data_.velocity_path_ = local_data_.position_path_.getDerivative();
+    local_data_.acceleration_path_ = local_data_.velocity_path_.getDerivative();
+    local_data_.start_pos_ = local_data_.position_path_.evaluateDeBoorT(0.0);
+    local_data_.duration_ = local_data_.position_path_.getTimeSum();
+    local_data_.path_id_ += 1;
   }
 
   void EGOPlannerManager::reparamBspline(UniformBspline &bspline, vector<Eigen::Vector3d> &start_end_derivative, double ratio,

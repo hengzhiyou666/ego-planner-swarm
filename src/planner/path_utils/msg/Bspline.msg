@@ -1,7 +1,7 @@
 int32 drone_id
 
 int32 order
-int64 traj_id
+int64 path_id
 builtin_interfaces/Time start_time
 
 float64[] knots

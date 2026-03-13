@@ -5,12 +5,12 @@
 
 #include <bspline_opt/bspline_optimizer.h>
 #include <bspline_opt/uniform_bspline.h>
-#include <traj_utils/msg/data_disp.hpp>
+#include <path_utils/msg/data_disp.hpp>
 #include <plan_env/grid_map.h>
 #include <plan_env/obj_predictor.h>
-#include <traj_utils/plan_container.hpp>
+#include <path_utils/plan_container.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <traj_utils/planning_visualization.h>
+#include <path_utils/planning_visualization.h>
 
 namespace ego_planner
 {
@@ -31,14 +31,14 @@ namespace ego_planner
     bool reboundReplan(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel, Eigen::Vector3d start_acc,
                        Eigen::Vector3d end_pt, Eigen::Vector3d end_vel, bool flag_polyInit, bool flag_randomPolyTraj);
     bool EmergencyStop(Eigen::Vector3d stop_pos);
-    bool planGlobalTraj(const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
+    bool planGlobalPath(const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
                         const Eigen::Vector3d &end_pos, const Eigen::Vector3d &end_vel, const Eigen::Vector3d &end_acc);
-    bool planGlobalTrajWaypoints(const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
+    bool planGlobalPathWaypoints(const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
                                  const std::vector<Eigen::Vector3d> &waypoints, const Eigen::Vector3d &end_vel, const Eigen::Vector3d &end_acc);
 
     void initPlanModules(rclcpp::Node::SharedPtr &node, PlanningVisualization::Ptr vis = NULL);
 
-    void deliverTrajToOptimizer(void) { bspline_optimizer_->setSwarmTrajs(&swarm_trajs_buf_); };
+    void deliverPathToOptimizer(void) { bspline_optimizer_->setSwarmPaths(&swarm_paths_buf_); };
 
     void setDroneIdtoOpt(void) { bspline_optimizer_->setDroneId(pp_.drone_id); }
 
@@ -48,15 +48,15 @@ namespace ego_planner
     
 
     PlanParameters pp_;
-    LocalTrajData local_data_;
-    GlobalTrajData global_data_;
+    LocalPathData local_data_;
+    GlobalPathData global_data_;
     GridMap::Ptr grid_map_;
     /* 局部规划使用的引导路径：从全局路径上最近点起向前约 7m 的一段 */
     std::vector<Eigen::Vector3d> local_guide_segment_;
     void setLocalGuideSegment(const std::vector<Eigen::Vector3d> &seg) { local_guide_segment_ = seg; }
     const std::vector<Eigen::Vector3d> &getLocalGuideSegment() const { return local_guide_segment_; }
     fast_planner::ObjPredictor::Ptr obj_predictor_;    
-    SwarmTrajData swarm_trajs_buf_;
+    SwarmPathData swarm_paths_buf_;
 
   private:
     /* main planning algorithms & modules */
@@ -68,12 +68,12 @@ namespace ego_planner
 
     int continous_failures_count_{0};
 
-    void updateTrajInfo(const UniformBspline &position_traj, const rclcpp::Time time_now);
+    void updatePathInfo(const UniformBspline &position_path, const rclcpp::Time time_now);
 
     void reparamBspline(UniformBspline &bspline, vector<Eigen::Vector3d> &start_end_derivative, double ratio, Eigen::MatrixXd &ctrl_pts, double &dt,
                         double &time_inc);
 
-    bool refineTrajAlgo(UniformBspline &traj, vector<Eigen::Vector3d> &start_end_derivative, double ratio, double &ts, Eigen::MatrixXd &optimal_control_points);
+    bool refinePathAlgo(UniformBspline &path, vector<Eigen::Vector3d> &start_end_derivative, double ratio, double &ts, Eigen::MatrixXd &optimal_control_points);
 
     // !SECTION stable
 

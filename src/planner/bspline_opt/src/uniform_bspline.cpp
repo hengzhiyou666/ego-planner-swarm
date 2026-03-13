@@ -305,10 +305,10 @@ namespace ego_planner
 
   double UniformBspline::getJerk()
   {
-    UniformBspline jerk_traj = getDerivative().getDerivative().getDerivative();
+    UniformBspline jerk_path = getDerivative().getDerivative().getDerivative();
 
-    Eigen::VectorXd times = jerk_traj.getKnot();
-    Eigen::MatrixXd ctrl_pts = jerk_traj.getControlPoint();
+    Eigen::VectorXd times = jerk_path.getKnot();
+    Eigen::MatrixXd ctrl_pts = jerk_path.getControlPoint();
     int dimension = ctrl_pts.rows();
 
     double jerk = 0.0;

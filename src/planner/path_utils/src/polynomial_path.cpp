@@ -1,7 +1,7 @@
 #include <iostream>
-#include <traj_utils/polynomial_traj.h>
+#include <path_utils/polynomial_path.h>
 
-PolynomialTraj PolynomialTraj::minSnapTraj(const Eigen::MatrixXd &Pos, const Eigen::Vector3d &start_vel,
+PolynomialPath PolynomialPath::minSnapPath(const Eigen::MatrixXd &Pos, const Eigen::Vector3d &start_vel,
                                            const Eigen::Vector3d &end_vel, const Eigen::Vector3d &start_acc,
                                            const Eigen::Vector3d &end_acc, const Eigen::VectorXd &Time)
 {
@@ -166,7 +166,7 @@ PolynomialTraj PolynomialTraj::minSnapTraj(const Eigen::MatrixXd &Pos, const Eig
   }
 
   /* ---------- use polynomials ---------- */
-  PolynomialTraj poly_traj;
+  PolynomialPath poly_path;
   for (int i = 0; i < poly_coeff.rows(); ++i)
   {
     vector<double> cx(6), cy(6), cz(6);
@@ -178,13 +178,13 @@ PolynomialTraj PolynomialTraj::minSnapTraj(const Eigen::MatrixXd &Pos, const Eig
     reverse(cy.begin(), cy.end());
     reverse(cz.begin(), cz.end());
     double ts = Time(i);
-    poly_traj.addSegment(cx, cy, cz, ts);
+    poly_path.addSegment(cx, cy, cz, ts);
   }
 
-  return poly_traj;
+  return poly_path;
 }
 
-PolynomialTraj PolynomialTraj::one_segment_traj_gen(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
+PolynomialPath PolynomialPath::one_segment_path_gen(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
                                                     const Eigen::Vector3d &end_pt, const Eigen::Vector3d &end_vel, const Eigen::Vector3d &end_acc,
                                                     double t)
 {
@@ -217,8 +217,8 @@ PolynomialTraj PolynomialTraj::one_segment_traj_gen(const Eigen::Vector3d &start
     cz[i] = Cofz(i);
   }
 
-  PolynomialTraj poly_traj;
-  poly_traj.addSegment(cx, cy, cz, t);
+  PolynomialPath poly_path;
+  poly_path.addSegment(cx, cy, cz, t);
 
-  return poly_traj;
+  return poly_path;
 }

@@ -14,12 +14,12 @@
 
 #include "bspline_opt/bspline_optimizer.h"
 #include "plan_env/grid_map.h"
-#include "traj_utils/msg/bspline.hpp"
-#include "traj_utils/msg/multi_bsplines.hpp"
+#include "path_utils/msg/bspline.hpp"
+#include "path_utils/msg/multi_bsplines.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
-#include "traj_utils/msg/data_disp.hpp"
+#include "path_utils/msg/data_disp.hpp"
 #include "ego_planner/planner_manager.h"
-#include "traj_utils/planning_visualization.h"
+#include "path_utils/planning_visualization.h"
 
 using std::vector;
 
@@ -36,9 +36,9 @@ namespace ego_planner
     {
       INIT,             // 初始化
       WAIT_TARGET,      // 等待目标（尚未收到目标点或参考路径）
-      GEN_NEW_TRAJ,     // 生成新轨迹（首次全局规划）
-      REPLAN_TRAJ,      // 重规划轨迹（飞行中局部/全局重规划）
-      EXEC_TRAJ,        // 执行轨迹（按当前轨迹飞行）
+      GEN_NEW_PATH,     // 生成新路径（首次全局规划）
+      REPLAN_PATH,      // 重规划路径（飞行中局部/全局重规划）
+      EXEC_PATH,        // 执行路径（按当前路径飞行）
       EMERGENCY_STOP,   // 紧急停止
       SEQUENTIAL_START  // 顺序启动（多机/编队等场景）
     };
@@ -52,8 +52,8 @@ namespace ego_planner
     /* planning utils */
     EGOPlannerManager::Ptr planner_manager_;
     PlanningVisualization::Ptr visualization_;
-    traj_utils::msg::DataDisp data_disp_;
-    traj_utils::msg::MultiBsplines multi_bspline_msgs_buf_;
+    path_utils::msg::DataDisp data_disp_;
+    path_utils::msg::MultiBsplines multi_bspline_msgs_buf_;
 
     /* parameters */
     int target_type_; // 1 mannual select, 2 hard code
@@ -89,23 +89,23 @@ namespace ego_planner
 
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr waypoint_sub_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
-    rclcpp::Subscription<traj_utils::msg::MultiBsplines>::SharedPtr swarm_trajs_sub_;
-    rclcpp::Subscription<traj_utils::msg::Bspline>::SharedPtr broadcast_bspline_sub_;
+    rclcpp::Subscription<path_utils::msg::MultiBsplines>::SharedPtr swarm_paths_sub_;
+    rclcpp::Subscription<path_utils::msg::Bspline>::SharedPtr broadcast_bspline_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr trigger_sub_;
     rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr pct_path_sub_;
 
     // rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr replan_pub_;
     // rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr new_pub_;
-    rclcpp::Publisher<traj_utils::msg::Bspline>::SharedPtr bspline_pub_;
-    rclcpp::Publisher<traj_utils::msg::DataDisp>::SharedPtr data_disp_pub_;
-    rclcpp::Publisher<traj_utils::msg::MultiBsplines>::SharedPtr swarm_trajs_pub_;
-    rclcpp::Publisher<traj_utils::msg::Bspline>::SharedPtr broadcast_bspline_pub_;
+    rclcpp::Publisher<path_utils::msg::Bspline>::SharedPtr bspline_pub_;
+    rclcpp::Publisher<path_utils::msg::DataDisp>::SharedPtr data_disp_pub_;
+    rclcpp::Publisher<path_utils::msg::MultiBsplines>::SharedPtr swarm_paths_pub_;
+    rclcpp::Publisher<path_utils::msg::Bspline>::SharedPtr broadcast_bspline_pub_;
 
     /* helper functions */
     bool callReboundReplan(bool flag_use_poly_init, bool flag_randomPolyTraj); // front-end and back-end method
     bool callEmergencyStop(Eigen::Vector3d stop_pos);                          // front-end and back-end method
-    bool planFromGlobalTraj(const int trial_times = 1);
-    bool planFromCurrentTraj(const int trial_times = 1);
+    bool planFromGlobalPath(const int trial_times = 1);
+    bool planFromCurrentPath(const int trial_times = 1);
 
     /* return value: std::pair< Times of the same state be continuously called, current continuously called state > */
     void changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call);
@@ -123,11 +123,11 @@ namespace ego_planner
     void waypointCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg);
     void triggerCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg);
     void odometryCallback(const std::shared_ptr<const nav_msgs::msg::Odometry> &msg);
-    void swarmTrajsCallback(const std::shared_ptr<const traj_utils::msg::MultiBsplines> &msg);
-    void BroadcastBsplineCallback(const std::shared_ptr<const traj_utils::msg::Bspline> &msg);
+    void swarmPathsCallback(const std::shared_ptr<const path_utils::msg::MultiBsplines> &msg);
+    void BroadcastBsplineCallback(const std::shared_ptr<const path_utils::msg::Bspline> &msg);
 
     bool checkCollision();
-    void publishSwarmTrajs(bool startup_pub);
+    void publishSwarmPaths(bool startup_pub);
 
   public:
     EGOReplanFSM(/* args */)

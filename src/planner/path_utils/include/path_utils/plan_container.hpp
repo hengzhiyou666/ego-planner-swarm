@@ -6,19 +6,19 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include <bspline_opt/uniform_bspline.h>
-#include <traj_utils/polynomial_traj.h>
+#include <path_utils/polynomial_path.h>
 
 using std::vector;
 
 namespace ego_planner
 {
 
-  class GlobalTrajData
+  class GlobalPathData
   {
   private:
   public:
-    PolynomialTraj global_traj_;
-    vector<UniformBspline> local_traj_;
+    PolynomialPath global_path_;
+    vector<UniformBspline> local_path_;
 
     double global_duration_;
     rclcpp::Time global_start_time_;
@@ -27,20 +27,20 @@ namespace ego_planner
     double last_time_inc_;
     double last_progress_time_;
 
-    GlobalTrajData(/* args */) {}
+    GlobalPathData(/* args */) {}
 
-    ~GlobalTrajData() {}
+    ~GlobalPathData() {}
 
-    bool localTrajReachTarget() { return fabs(local_end_time_ - global_duration_) < 0.1; }
+    bool localPathReachTarget() { return fabs(local_end_time_ - global_duration_) < 0.1; }
 
-    void setGlobalTraj(const PolynomialTraj &traj, const rclcpp::Time &time)
+    void setGlobalPath(const PolynomialPath &path, const rclcpp::Time &time)
     {
-      global_traj_ = traj;
-      global_traj_.init();
-      global_duration_ = global_traj_.getTimeSum();
+      global_path_ = path;
+      global_path_.init();
+      global_duration_ = global_path_.getTimeSum();
       global_start_time_ = time;
 
-      local_traj_.clear();
+      local_path_.clear();
       local_start_time_ = -1;
       local_end_time_ = -1;
       time_increase_ = 0.0;
@@ -48,12 +48,12 @@ namespace ego_planner
       last_progress_time_ = 0.0;
     }
 
-    void setLocalTraj(UniformBspline traj, double local_ts, double local_te, double time_inc)
+    void setLocalPath(UniformBspline path, double local_ts, double local_te, double time_inc)
     {
-      local_traj_.resize(3);
-      local_traj_[0] = traj;
-      local_traj_[1] = local_traj_[0].getDerivative();
-      local_traj_[2] = local_traj_[1].getDerivative();
+      local_path_.resize(3);
+      local_path_[0] = path;
+      local_path_[1] = local_path_[0].getDerivative();
+      local_path_[2] = local_path_[1].getDerivative();
 
       local_start_time_ = local_ts;
       local_end_time_ = local_te;
@@ -66,17 +66,17 @@ namespace ego_planner
     {
       if (t >= -1e-3 && t <= local_start_time_)
       {
-        return global_traj_.evaluate(t - time_increase_ + last_time_inc_);
+        return global_path_.evaluate(t - time_increase_ + last_time_inc_);
       }
       else if (t >= local_end_time_ && t <= global_duration_ + 1e-3)
       {
-        return global_traj_.evaluate(t - time_increase_);
+        return global_path_.evaluate(t - time_increase_);
       }
       else
       {
         double tm, tmp;
-        local_traj_[0].getTimeSpan(tm, tmp);
-        return local_traj_[0].evaluateDeBoor(tm + t - local_start_time_);
+        local_path_[0].getTimeSpan(tm, tmp);
+        return local_path_[0].evaluateDeBoor(tm + t - local_start_time_);
       }
     }
 
@@ -84,17 +84,17 @@ namespace ego_planner
     {
       if (t >= -1e-3 && t <= local_start_time_)
       {
-        return global_traj_.evaluateVel(t);
+        return global_path_.evaluateVel(t);
       }
       else if (t >= local_end_time_ && t <= global_duration_ + 1e-3)
       {
-        return global_traj_.evaluateVel(t - time_increase_);
+        return global_path_.evaluateVel(t - time_increase_);
       }
       else
       {
         double tm, tmp;
-        local_traj_[0].getTimeSpan(tm, tmp);
-        return local_traj_[1].evaluateDeBoor(tm + t - local_start_time_);
+        local_path_[0].getTimeSpan(tm, tmp);
+        return local_path_[1].evaluateDeBoor(tm + t - local_start_time_);
       }
     }
 
@@ -102,24 +102,24 @@ namespace ego_planner
     {
       if (t >= -1e-3 && t <= local_start_time_)
       {
-        return global_traj_.evaluateAcc(t);
+        return global_path_.evaluateAcc(t);
       }
       else if (t >= local_end_time_ && t <= global_duration_ + 1e-3)
       {
-        return global_traj_.evaluateAcc(t - time_increase_);
+        return global_path_.evaluateAcc(t - time_increase_);
       }
       else
       {
         double tm, tmp;
-        local_traj_[0].getTimeSpan(tm, tmp);
-        return local_traj_[2].evaluateDeBoor(tm + t - local_start_time_);
+        local_path_[0].getTimeSpan(tm, tmp);
+        return local_path_[2].evaluateDeBoor(tm + t - local_start_time_);
       }
     }
 
-    // get Bspline paramterization data of a local trajectory within a sphere
-    // start_t: start time of the trajectory
+    // get Bspline paramterization data of a local path within a sphere
+    // start_t: start time of the path
     // dist_pt: distance between the discretized points
-    void getTrajByRadius(const double &start_t, const double &des_radius, const double &dist_pt,
+    void getPathByRadius(const double &start_t, const double &des_radius, const double &dist_pt,
                          vector<Eigen::Vector3d> &point_set, vector<Eigen::Vector3d> &start_end_derivative,
                          double &dt, double &seg_duration)
     {
@@ -132,7 +132,7 @@ namespace ego_planner
       Eigen::Vector3d prev_pt = first_pt;              // previous point
       Eigen::Vector3d cur_pt;                          // current point
 
-      // go forward until the traj exceed radius or global time
+      // go forward until the path exceed radius or global time
 
       while (radius < des_radius && seg_time < global_duration_ - start_t - 1e-3)
       {
@@ -165,11 +165,11 @@ namespace ego_planner
       start_end_derivative.push_back(getAcceleration(start_t + seg_time));
     }
 
-    // get Bspline paramterization data of a fixed duration local trajectory
-    // start_t: start time of the trajectory
+    // get Bspline paramterization data of a fixed duration local path
+    // start_t: start time of the path
     // duration: time length of the segment
     // seg_num: discretized the segment into *seg_num* parts
-    void getTrajByDuration(double start_t, double duration, int seg_num,
+    void getPathByDuration(double start_t, double duration, int seg_num,
                            vector<Eigen::Vector3d> &point_set,
                            vector<Eigen::Vector3d> &start_end_derivative, double &dt)
     {
@@ -204,29 +204,29 @@ namespace ego_planner
     double time_adjust_ = 0.0;
   };
 
-  struct LocalTrajData
+  struct LocalPathData
   {
-    /* info of generated traj */
+    /* info of generated path */
 
-    int traj_id_;
+    int path_id_;
     double duration_;
     rclcpp::Time start_time_;
     Eigen::Vector3d start_pos_;
-    UniformBspline position_traj_, velocity_traj_, acceleration_traj_;
+    UniformBspline position_path_, velocity_path_, acceleration_path_;
   };
 
-  struct OneTrajDataOfSwarm
+  struct OnePathDataOfSwarm
   {
-    /* info of generated traj */
+    /* info of generated path */
 
     int drone_id;
     double duration_;
     rclcpp::Time start_time_;
     Eigen::Vector3d start_pos_;
-    UniformBspline position_traj_;
+    UniformBspline position_path_;
   };
 
-  typedef std::vector<OneTrajDataOfSwarm> SwarmTrajData;
+  typedef std::vector<OnePathDataOfSwarm> SwarmPathData;
 
 } // namespace ego_planner
 

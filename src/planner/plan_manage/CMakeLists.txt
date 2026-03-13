@@ -20,7 +20,7 @@ find_package(nav_msgs REQUIRED)
 find_package(plan_env REQUIRED)
 find_package(path_searching REQUIRED)
 find_package(bspline_opt REQUIRED)
-find_package(traj_utils REQUIRED COMPONENTS traj_utils_lib)
+find_package(path_utils REQUIRED COMPONENTS path_utils_lib)
 find_package(cv_bridge REQUIRED)
 
 find_package(Eigen3 REQUIRED)
@@ -53,20 +53,20 @@ add_executable(ego_planner_node
 )
 
 # target_link_libraries(ego_planner_node
-#   traj_utils_lib
+#   path_utils_lib
 # )
 
 ament_target_dependencies(ego_planner_node 
                           rclcpp nav_msgs visualization_msgs 
                           geometry_msgs
                           plan_env path_searching 
-                          bspline_opt traj_utils 
+                          bspline_opt path_utils 
                           cv_bridge pcl_conversions )
 
-find_library(TRAJ_UTILS_LIB traj_utils_lib PATHS ${traj_utils_LIBRARY_DIRS})
+find_library(PATH_UTILS_LIB path_utils_lib PATHS ${path_utils_LIBRARY_DIRS})
 
 target_link_libraries(ego_planner_node
-    ${TRAJ_UTILS_LIB}
+    ${PATH_UTILS_LIB}
 )
 
 # Install targets

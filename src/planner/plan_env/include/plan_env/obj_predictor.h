@@ -156,7 +156,7 @@ namespace fast_planner
     vector<std::shared_ptr<ObjHistory>> obj_histories_;
 
     /* share data with planner */
-    ObjPrediction predict_trajs_;
+    ObjPrediction predict_paths_;
     ObjScale obj_scale_;
     vector<bool> scale_init_;
 
