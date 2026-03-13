@@ -81,4 +81,10 @@ install(
   DESTINATION share/${PROJECT_NAME}/launch
 )
 
+# 安装 RViz 配置文件（robot.launch.py 可选自动打开 RViz 时使用）
+install(
+  DIRECTORY config/
+  DESTINATION share/${PROJECT_NAME}/config
+)
+
 ament_package()

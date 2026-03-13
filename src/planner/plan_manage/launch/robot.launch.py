@@ -1,14 +1,17 @@
 """
 真实机器狗启动：仅启动 ego_planner（规划器），订阅机器狗传感器/里程计话题。
 用法见 docs/本地地图与机器狗相机配置说明.md
+可通过 rviz:=false 关闭自动启动 RViz。
 """
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 from launch.conditions import IfCondition
+import os
 
 def generate_launch_description():
     # =================先记住“我要用哪个参数”，等真正启动时再把实际值塞进来==================
@@ -30,6 +33,8 @@ def generate_launch_description():
     # 同时输入 depth + pose + cloud：depth 与 pose 做时间同步，cloud 独立订阅
     input_pose_message_type = LaunchConfiguration('input_pose_message_type', default=1)
     frame_id = LaunchConfiguration('frame_id', default='odom')
+    # 是否自动启动 RViz（Fixed Frame: head_init；话题：/pct_path_unfinished, /odometry, /drone_0_plan_vis/optimal_list, /drone_0_plan_vis/goal_point）
+    rviz = LaunchConfiguration('rviz', default='true')
     cx = LaunchConfiguration('cx', default='959.196655')
     cy = LaunchConfiguration('cy', default='538.812378')
     fx = LaunchConfiguration('fx', default='805.299072')
@@ -62,6 +67,8 @@ def generate_launch_description():
     launch_plan.add_action(DeclareLaunchArgument('cy', default_value=cy, description='Camera intrinsic cy'))
     launch_plan.add_action(DeclareLaunchArgument('fx', default_value=fx, description='Camera intrinsic fx'))
     launch_plan.add_action(DeclareLaunchArgument('fy', default_value=fy, description='Camera intrinsic fy'))
+    launch_plan.add_action(DeclareLaunchArgument('rviz', default_value='true',
+                                        description='Whether to auto-start RViz (config: Fixed Frame head_init, topics pct_path_unfinished, odometry, plan_vis)'))
 
     #=======================高级设置说明书advanced_param.launch.py===============================
     # ----- 规划器参数：真实机器狗用机器人话题与相机内参 -----
@@ -104,5 +111,16 @@ def generate_launch_description():
     
     )
     launch_plan.add_action(advanced_param_for_real_robot)
+
+    # ----- 可选：自动启动 RViz（Fixed Frame: head_init；话题见 config/robot.rviz） -----
+    rviz_config_path = os.path.join(get_package_share_directory('ego_planner'), 'config', 'robot.rviz')
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        arguments=['-d', rviz_config_path],
+        condition=IfCondition(rviz),
+    )
+    launch_plan.add_action(rviz_node)
 
     return launch_plan
