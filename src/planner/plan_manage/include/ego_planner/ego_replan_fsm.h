@@ -58,7 +58,7 @@ namespace ego_planner
     /* parameters */
     int target_type_; // 1 mannual select, 2 hard code
     double no_replan_thresh_, replan_thresh_;
-    double waypoints_[50][3];
+    double waypoints_[200][3];
     int waypoint_num_, wp_id_;
     double planning_horizen_, planning_horizen_time_;
     double emergency_time_;
@@ -92,14 +92,15 @@ namespace ego_planner
     rclcpp::Subscription<path_tools::msg::MultiBsplines>::SharedPtr swarm_paths_sub_;
     rclcpp::Subscription<path_tools::msg::Bspline>::SharedPtr broadcast_bspline_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr trigger_sub_;
-    rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr pct_path_sub_;
+    rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr pct_path_sub_;   // 外部给的一整条参考路径（/pct_path）
 
     // rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr replan_pub_;
     // rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr new_pub_;
-    rclcpp::Publisher<path_tools::msg::Bspline>::SharedPtr bspline_pub_;
-    rclcpp::Publisher<path_tools::msg::DataDisp>::SharedPtr data_disp_pub_;
-    rclcpp::Publisher<path_tools::msg::MultiBsplines>::SharedPtr swarm_paths_pub_;
-    rclcpp::Publisher<path_tools::msg::Bspline>::SharedPtr broadcast_bspline_pub_;
+    rclcpp::Publisher<path_tools::msg::Bspline>::SharedPtr bspline_pub_;          // 当前本机优化后的 B 样条路径
+    rclcpp::Publisher<path_tools::msg::DataDisp>::SharedPtr data_disp_pub_;       // 调试/可视化用数据
+    rclcpp::Publisher<path_tools::msg::MultiBsplines>::SharedPtr swarm_paths_pub_; // 发送本机路径给其他无人机
+    rclcpp::Publisher<path_tools::msg::Bspline>::SharedPtr broadcast_bspline_pub_; // 向所有无人机广播路径
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pct_path_unfinished_pub_;    // 发布“从当前位置开始还没走完的参考路径”/pct_path_unfinished
 
     /* helper functions */
     bool callReboundReplan(bool flag_use_poly_init, bool flag_randomPolyTraj); // front-end and back-end method

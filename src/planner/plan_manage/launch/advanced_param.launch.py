@@ -140,7 +140,7 @@ def generate_launch_description():
         parameters=[
             {'fsm/egoplanner_input_point_or_path': egoplanner_input_point_or_path},
             {'fsm/thresh_replan_time': 1.0},
-            {'fsm/thresh_no_replan_meter': 1.0},
+            {'fsm/thresh_no_replan_meter': 0.5},
             {'fsm/path_ahead_time': path_ahead_time},
             {'fsm/planning_horizen_time': 3.0},
             {'fsm/emergency_time': 1.0},

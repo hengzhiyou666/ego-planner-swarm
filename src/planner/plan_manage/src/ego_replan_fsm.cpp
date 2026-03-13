@@ -1,5 +1,6 @@
 
 #include <ego_planner/ego_replan_fsm.h>
+#include <limits>
 
 namespace ego_planner
 {
@@ -114,6 +115,8 @@ namespace ego_planner
 
     bspline_pub_ = node_->create_publisher<path_tools::msg::Bspline>("planning/bspline", 10);
     data_disp_pub_ = node_->create_publisher<path_tools::msg::DataDisp>("planning/data_display", 100);
+    // 发布“从当前里程计位置开始、尚未走完的参考路径”，方便在 RViz 中查看参考路径还剩下多少
+    pct_path_unfinished_pub_ = node_->create_publisher<nav_msgs::msg::Path>("/pct_path_unfinished", 1);
 
     if (target_type_ == TARGET_TYPE::MANUAL_TARGET)
     {
@@ -377,77 +380,187 @@ namespace ego_planner
     planNextWaypoint(wps_[wp_id_]);
   }
 
+  // /pct_path 话题回调：
+  // 1）接收外部给的一整条“全局参考路径”（密集点，不再做稀疏采样）；
+  // 2）结合当前里程计位置 a，切掉“已经走过的前半段”，得到从 a 开始的未走完路径 pct_path_unfinished 并发布到 /pct_path_unfinished；
+  // 3）在 pct_path_unfinished 里，从 a 开始累计大约 7m 的一小段，作为局部规划的引导路径喂给 EGO Planner。
   void EGOReplanFSM::pctPathCallback(const std::shared_ptr<const nav_msgs::msg::Path> &msg)
   {
-    if (msg->poses.empty())
-    {
-      RCLCPP_WARN(node_->get_logger(), "Received empty /pct_path, ignore.");
-      return;
-    }
-
-    // 将 /pct_path 转换为间隔约 5m 的离散路点
-    waypoint_num_ = 0;
-
-    const size_t max_wp = 50;
-
-    Eigen::Vector3d last_pt;
-    double accumulated_dist = 0.0;
-
-    for (size_t i = 0; i < msg->poses.size(); ++i)
-    {
-      const auto &pose = msg->poses[i].pose;
-      Eigen::Vector3d pt(pose.position.x, pose.position.y, pose.position.z);
-
-      if (i == 0)
-      {
-        // 第一个点直接作为起点；plan_xy_only 时仅用 xy，z 强制为 0
-        waypoints_[waypoint_num_][0] = pt.x();
-        waypoints_[waypoint_num_][1] = pt.y();
-        waypoints_[waypoint_num_][2] = plan_xy_only_ ? 0.0 : pt.z();
-        last_pt = pt;
-        waypoint_num_++;
-
-        if (waypoint_num_ >= (int)max_wp)
-          break;
-
-        continue;
-      }
-
-      double dist = (pt - last_pt).norm();
-      accumulated_dist += dist;
-      last_pt = pt;
-
-      // 每累计约 5m 取一个路点，保证“前进 5m 一个局部目标”；plan_xy_only 时 z 强制为 0
-      if (accumulated_dist >= 5.0 - 1e-3)
-      {
-        waypoints_[waypoint_num_][0] = pt.x();
-        waypoints_[waypoint_num_][1] = pt.y();
-        waypoints_[waypoint_num_][2] = plan_xy_only_ ? 0.0 : pt.z();
-
-        waypoint_num_++;
-        accumulated_dist = 0.0;
-
-        if (waypoint_num_ >= (int)max_wp)
-          break;
-      }
-    }
-
-    if (waypoint_num_ <= 0)
-    {
-      RCLCPP_WARN(node_->get_logger(), "No valid waypoints generated from /pct_path.");
-      return;
-    }
-
-    have_pct_path_ = true;
-    have_trigger_ = true; /* REFENCE_PATH 下用收到路径作为触发 */
-
+    // 如果此时还没有里程计，就没法知道“当前位置 a 在路径上的什么位置”，只能先忽略
     if (!have_odom_)
     {
       RCLCPP_WARN(node_->get_logger(), "/pct_path received but odom not ready yet.");
       return;
     }
 
-    // 利用生成的路点序列，复用原有 readGivenWps + planNextWaypoint 逻辑
+    // 1）安全性检查：如果消息里一个点都没有，直接忽略，不进行后续处理
+    if (msg->poses.empty())
+    {
+      RCLCPP_WARN(node_->get_logger(), "Received empty /pct_path, ignore.");
+      return;
+    }
+
+    // 2）先把原始 /pct_path 中的所有点转成 Eigen 向量，保留“密集路径”（不做降采样）
+    std::vector<Eigen::Vector3d> raw_pts;
+    raw_pts.reserve(msg->poses.size());
+    for (const auto &ps : msg->poses)
+    {
+      const auto &p = ps.pose.position;
+      Eigen::Vector3d pt(p.x, p.y, p.z);
+      if (plan_xy_only_)
+        pt(2) = 0.0;
+      raw_pts.push_back(pt);
+    }
+    if (raw_pts.size() < 2)
+    {
+      RCLCPP_WARN(node_->get_logger(), "pct_path has less than 2 points, ignore.");
+      return;
+    }
+
+    // 当前里程计位置 a（如只规划 XY，则把 z 置 0）
+    Eigen::Vector3d a = odom_pos_;
+    if (plan_xy_only_)
+      a(2) = 0.0;
+
+    // 3）在原始路径 raw_pts 中找一个“离 a 最近的点 b”，作为当前所在路径上的参考点
+    int b_idx = 0;
+    double best_d2 = std::numeric_limits<double>::infinity();
+    for (int i = 0; i < static_cast<int>(raw_pts.size()); ++i)
+    {
+      double d2 = (raw_pts[i] - a).squaredNorm();
+      if (d2 < best_d2)
+      {
+        best_d2 = d2;
+        b_idx = i;
+      }
+    }
+    Eigen::Vector3d b = raw_pts[b_idx];
+
+    // 计算 a 到 b 的直线距离 ab，用它来决定“向前再走多远找到点 c”
+    double ab = (b - a).norm();
+
+    // 4）从 b 开始，沿着路径方向向前“累积路径弧长”，走大约 ab 的长度，找到路径上的点 c
+    Eigen::Vector3d c = b;
+    int c_seg_idx = b_idx; // c 所在的线段起点索引
+    if (ab > 1e-3 && b_idx < static_cast<int>(raw_pts.size()) - 1)
+    {
+      double remain = ab;
+      Eigen::Vector3d cur = b;
+      bool found_c = false;
+      for (int i = b_idx; i < static_cast<int>(raw_pts.size()) - 1; ++i)
+      {
+        Eigen::Vector3d next = raw_pts[i + 1];
+        double seg_len = (next - cur).norm();
+        if (seg_len < 1e-6)
+        {
+          cur = next;
+          continue;
+        }
+        if (remain <= seg_len)
+        {
+          double ratio = remain / seg_len;
+          c = cur + ratio * (next - cur);
+          c_seg_idx = i;
+          found_c = true;
+          break;
+        }
+        else
+        {
+          remain -= seg_len;
+          cur = next;
+        }
+      }
+      // 如果到路径末尾都没走完 remain，就把 c 放在最后一个点
+      if (!found_c)
+      {
+        c = raw_pts.back();
+        c_seg_idx = static_cast<int>(raw_pts.size()) - 2;
+      }
+    }
+
+    // 5）构造“从 a 走到 c，再接上 c 之后尚未走完的整条路径”的未完成路径 pct_path_unfinished
+    std::vector<Eigen::Vector3d> unfinished_pts;
+    unfinished_pts.reserve(raw_pts.size());
+
+    // 5.1）先在 a 到 c 之间，每隔约 0.1m 取一个点；如果 ac 很短，则只取 a 和 c
+    Eigen::Vector3d ac_vec = c - a;
+    double ac_len = ac_vec.norm();
+    const double ds = 0.1; // 10cm 步长
+
+    unfinished_pts.push_back(a);
+    if (ac_len > 1e-3)
+    {
+      int steps = static_cast<int>(std::floor(ac_len / ds));
+      Eigen::Vector3d dir = ac_vec / ac_len;
+      for (int i = 1; i < steps; ++i)
+      {
+        double dist = i * ds;
+        unfinished_pts.push_back(a + dist * dir);
+      }
+      // 把 c 作为这一段的终点
+      unfinished_pts.push_back(c);
+    }
+
+    // 5.2）再把 c 之后的路径原样拼接上去（跳过 c 所在线段的起点，避免重复）
+    for (int i = c_seg_idx + 1; i < static_cast<int>(raw_pts.size()); ++i)
+    {
+      unfinished_pts.push_back(raw_pts[i]);
+    }
+
+    // 5.3）发布 /pct_path_unfinished，方便 RViz 中查看“从当前位置开始还没走完的全局参考路径”
+    nav_msgs::msg::Path unfinished_msg;
+    unfinished_msg.header = msg->header;
+    unfinished_msg.poses.resize(unfinished_pts.size());
+    for (size_t i = 0; i < unfinished_pts.size(); ++i)
+    {
+      auto &ps = unfinished_msg.poses[i];
+      ps.header = msg->header;
+      ps.pose.position.x = unfinished_pts[i].x();
+      ps.pose.position.y = unfinished_pts[i].y();
+      ps.pose.position.z = unfinished_pts[i].z();
+      // 姿态这里不做精细处理，简单置为单位四元数即可
+      ps.pose.orientation.x = 0.0;
+      ps.pose.orientation.y = 0.0;
+      ps.pose.orientation.z = 0.0;
+      ps.pose.orientation.w = 1.0;
+    }
+    pct_path_unfinished_pub_->publish(unfinished_msg);
+
+    // 6）在 pct_path_unfinished 中，从 a 开始累计大约 7m 的一小段，作为局部规划的引导路径
+    waypoint_num_ = 0;
+    const size_t max_wp = 200;       // 和内部数组上限保持一致
+    const double guide_len = 7.0;   // 从当前位置往前看的路径长度（单位 m）
+
+    double cum = 0.0;
+    for (size_t i = 0; i < unfinished_pts.size() && waypoint_num_ < static_cast<int>(max_wp); ++i)
+    {
+      const Eigen::Vector3d &p = unfinished_pts[i];
+
+      waypoints_[waypoint_num_][0] = p.x();
+      waypoints_[waypoint_num_][1] = p.y();
+      waypoints_[waypoint_num_][2] = plan_xy_only_ ? 0.0 : p.z();
+      waypoint_num_++;
+
+      if (i > 0)
+      {
+        cum += (unfinished_pts[i] - unfinished_pts[i - 1]).norm();
+        if (cum >= guide_len - 1e-3)
+          break;
+      }
+    }
+
+    // 7）如果依然没得到任何有效路点，就放弃这条路径
+    if (waypoint_num_ <= 0)
+    {
+      RCLCPP_WARN(node_->get_logger(), "No valid waypoints generated from /pct_path_unfinished.");
+      return;
+    }
+
+    // 标记“已经有一条参考路径了”，并把它当作一次“开始规划”的触发信号
+    have_pct_path_ = true;
+    have_trigger_ = true; /* REFENCE_PATH 下用收到路径作为触发 */
+
+    // 8）把采样好的 waypoints_ 转换成内部的 wps_ 向量，并调用原有多路点规划逻辑
     readGivenWps();
   }
 
