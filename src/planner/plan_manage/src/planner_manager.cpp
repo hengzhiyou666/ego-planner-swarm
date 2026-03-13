@@ -78,13 +78,16 @@ namespace ego_planner
       start_end_derivatives.clear();
       flag_regenerate = false;
 
-      // 这里如果正常进入if（通常为初次生成），则do部分只进行一次，即只清空一次点集；若进入else则有可能对异常情况重置flag_regenerate并再do一次
+      // 这里如果正常进入 if（通常为初次生成），则 do 部分只进行一次；
+      // 若进入 else 则有可能对异常情况重置 flag_regenerate 并再 do 一次。
       if (flag_first_call || flag_polyInit || flag_force_polynomial /*|| ( start_pt - local_target_pt ).norm() < 1.0*/) // Initial path generated from a min-snap traj by order.
       {
         flag_first_call = false;
         flag_force_polynomial = false;
-        // 若有从全局路径截取的 7m 引导段，则直接用作局部规划的初始路径（目标路径/引导边界）
-        if (!local_guide_segment_.empty() && local_guide_segment_.size() >= 2)
+
+        // ---------- 1）优先尝试使用从全局路径截取的引导段 ----------
+        bool use_guide = !local_guide_segment_.empty() && local_guide_segment_.size() >= 2;
+        if (use_guide)
         {
           point_set.push_back(start_pt);
           for (const Eigen::Vector3d &pt : local_guide_segment_)
@@ -99,72 +102,75 @@ namespace ego_planner
             std::cout << "[reboundReplan]: guide segment too short ("
                       << point_set.size()
                       << " pts), fallback to polynomial init." << std::endl;
-            flag_force_polynomial = true;
-            flag_regenerate = true;
-            continue; // 重新进入 do{...}while，走下面的多项式初始化分支
+            use_guide = false;
+            point_set.clear();
           }
-
-          start_end_derivatives.push_back(start_vel);
-          start_end_derivatives.push_back(local_target_vel);
-          start_end_derivatives.push_back(start_acc);
-          start_end_derivatives.push_back(Eigen::Vector3d::Zero());
-        }
-        else
-        {
-        // 用于存储生成的轨迹
-        PolynomialPath gl_path;
-
-        double dist = (start_pt - local_target_pt).norm();
-        // 判断 速度的平方/加速度 是否大于dist，并决定如何计算时间
-        double time = pow(pp_.max_vel_, 2) / pp_.max_acc_ > dist ? sqrt(dist / pp_.max_acc_) : (dist - pow(pp_.max_vel_, 2) / pp_.max_acc_) / pp_.max_vel_ + 2 * pp_.max_vel_ / pp_.max_acc_;
-
-        if (!flag_randomPolyTraj)
-        // false生成一段单一的多项式轨迹，true生成一个包含随机插入点的轨迹
-        {
-          gl_path = PolynomialPath::one_segment_path_gen(start_pt, start_vel, start_acc, local_target_pt, local_target_vel, Eigen::Vector3d::Zero(), time);
-        }
-        else
-        {
-          Eigen::Vector3d horizen_dir = ((start_pt - local_target_pt).cross(Eigen::Vector3d(0, 0, 1))).normalized();
-          Eigen::Vector3d vertical_dir = ((start_pt - local_target_pt).cross(horizen_dir)).normalized();
-          Eigen::Vector3d random_inserted_pt = (start_pt + local_target_pt) / 2 +
-                                               (((double)rand()) / RAND_MAX - 0.5) * (start_pt - local_target_pt).norm() * horizen_dir * 0.8 * (-0.978 / (continous_failures_count_ + 0.989) + 0.989) +
-                                               (((double)rand()) / RAND_MAX - 0.5) * (start_pt - local_target_pt).norm() * vertical_dir * 0.4 * (-0.978 / (continous_failures_count_ + 0.989) + 0.989);
-          Eigen::MatrixXd pos(3, 3);
-          pos.col(0) = start_pt;
-          pos.col(1) = random_inserted_pt;
-          pos.col(2) = local_target_pt;
-          Eigen::VectorXd t(2);
-          t(0) = t(1) = time / 2;
-          gl_path = PolynomialPath::minSnapPath(pos, start_vel, local_target_vel, start_acc, Eigen::Vector3d::Zero(), t);
-        }
-
-        double t;
-        bool flag_too_far;
-        ts *= 1.5; // ts will be divided by 1.5 in the next
-        do
-        {
-          ts /= 1.5;
-          point_set.clear();
-          flag_too_far = false;
-          Eigen::Vector3d last_pt = gl_path.evaluate(0);
-          for (t = 0; t < time; t += ts)
+          else
           {
-            Eigen::Vector3d pt = gl_path.evaluate(t);
-            if ((last_pt - pt).norm() > pp_.ctrl_pt_dist * 1.5)
-            {
-              flag_too_far = true;
-              break;
-            }
-            last_pt = pt;
-            point_set.push_back(pt);
+            start_end_derivatives.push_back(start_vel);
+            start_end_derivatives.push_back(local_target_vel);
+            start_end_derivatives.push_back(start_acc);
+            start_end_derivatives.push_back(Eigen::Vector3d::Zero());
           }
-        } while (flag_too_far || point_set.size() < 7); // To make sure the initial path has enough points.
-        t -= ts;
-        start_end_derivatives.push_back(gl_path.evaluateVel(0));
-        start_end_derivatives.push_back(local_target_vel);
-        start_end_derivatives.push_back(gl_path.evaluateAcc(0));
-        start_end_derivatives.push_back(gl_path.evaluateAcc(t));
+        }
+
+        // ---------- 2）若未使用引导段（没有或太短），则退化为多项式初始化 ----------
+        if (!use_guide)
+        {
+          // 用于存储生成的轨迹
+          PolynomialPath gl_path;
+
+          double dist = (start_pt - local_target_pt).norm();
+          // 判断 速度的平方/加速度 是否大于 dist，并决定如何计算时间
+          double time = pow(pp_.max_vel_, 2) / pp_.max_acc_ > dist ? sqrt(dist / pp_.max_acc_) : (dist - pow(pp_.max_vel_, 2) / pp_.max_acc_) / pp_.max_vel_ + 2 * pp_.max_vel_ / pp_.max_acc_;
+
+          if (!flag_randomPolyTraj)
+          // false 生成一段单一的多项式轨迹，true 生成一个包含随机插入点的轨迹
+          {
+            gl_path = PolynomialPath::one_segment_path_gen(start_pt, start_vel, start_acc, local_target_pt, local_target_vel, Eigen::Vector3d::Zero(), time);
+          }
+          else
+          {
+            Eigen::Vector3d horizen_dir = ((start_pt - local_target_pt).cross(Eigen::Vector3d(0, 0, 1))).normalized();
+            Eigen::Vector3d vertical_dir = ((start_pt - local_target_pt).cross(horizen_dir)).normalized();
+            Eigen::Vector3d random_inserted_pt = (start_pt + local_target_pt) / 2 +
+                                                 (((double)rand()) / RAND_MAX - 0.5) * (start_pt - local_target_pt).norm() * horizen_dir * 0.8 * (-0.978 / (continous_failures_count_ + 0.989) + 0.989) +
+                                                 (((double)rand()) / RAND_MAX - 0.5) * (start_pt - local_target_pt).norm() * vertical_dir * 0.4 * (-0.978 / (continous_failures_count_ + 0.989) + 0.989);
+            Eigen::MatrixXd pos(3, 3);
+            pos.col(0) = start_pt;
+            pos.col(1) = random_inserted_pt;
+            pos.col(2) = local_target_pt;
+            Eigen::VectorXd t(2);
+            t(0) = t(1) = time / 2;
+            gl_path = PolynomialPath::minSnapPath(pos, start_vel, local_target_vel, start_acc, Eigen::Vector3d::Zero(), t);
+          }
+
+          double t;
+          bool flag_too_far;
+          ts *= 1.5; // ts will be divided by 1.5 in the next
+          do
+          {
+            ts /= 1.5;
+            point_set.clear();
+            flag_too_far = false;
+            Eigen::Vector3d last_pt = gl_path.evaluate(0);
+            for (t = 0; t < time; t += ts)
+            {
+              Eigen::Vector3d pt = gl_path.evaluate(t);
+              if ((last_pt - pt).norm() > pp_.ctrl_pt_dist * 1.5)
+              {
+                flag_too_far = true;
+                break;
+              }
+              last_pt = pt;
+              point_set.push_back(pt);
+            }
+          } while (flag_too_far || point_set.size() < 7); // To make sure the initial path has enough points.
+          t -= ts;
+          start_end_derivatives.push_back(gl_path.evaluateVel(0));
+          start_end_derivatives.push_back(local_target_vel);
+          start_end_derivatives.push_back(gl_path.evaluateAcc(0));
+          start_end_derivatives.push_back(gl_path.evaluateAcc(t));
         }
       }
       else // Initial path generated from previous trajectory.
