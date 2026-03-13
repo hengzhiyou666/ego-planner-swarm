@@ -17,7 +17,7 @@ namespace ego_planner
     node->declare_parameter("manager/max_jerk", -1.0);
     node->declare_parameter("manager/feasibility_tolerance", 0.0);
     node->declare_parameter("manager/control_points_distance", -1.0);
-    node->declare_parameter("manager/planning_horizon", 5.0);
+    node->declare_parameter("manager/path_ahead_time", 5.0);
     node->declare_parameter("manager/try_more_paths_and_choose_best", false);
     node->declare_parameter("manager/drone_id", -1);
 
@@ -26,7 +26,7 @@ namespace ego_planner
     node->get_parameter("manager/max_jerk", pp_.max_jerk_);
     node->get_parameter("manager/feasibility_tolerance", pp_.feasibility_tolerance_);
     node->get_parameter("manager/control_points_distance", pp_.ctrl_pt_dist);
-    node->get_parameter("manager/planning_horizon", pp_.planning_horizen_);
+    node->get_parameter("manager/path_ahead_time", pp_.planning_horizen_);
     node->get_parameter("manager/try_more_paths_and_choose_best", pp_.try_more_paths_and_choose_best);
     node->get_parameter("manager/drone_id", pp_.drone_id);
 

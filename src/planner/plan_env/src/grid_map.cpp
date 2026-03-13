@@ -45,7 +45,7 @@ void GridMap::initMap(rclcpp::Node::SharedPtr node)
   node_->declare_parameter("grid_map/virtual_ceil_yp", -0.1);
   node_->declare_parameter("grid_map/virtual_ceil_yn", -0.1);
   node_->declare_parameter("grid_map/show_occ_time", false);
-  node_->declare_parameter("grid_map/pose_type", 1);
+  node_->declare_parameter("grid_map/input_pose_message_type", 1);
   node_->declare_parameter("grid_map/frame_id", "world");
   node_->declare_parameter("grid_map/local_map_margin", 1);
   node_->declare_parameter("grid_map/ground_height", 1.0);
@@ -82,7 +82,7 @@ void GridMap::initMap(rclcpp::Node::SharedPtr node)
   node_->get_parameter("grid_map/virtual_ceil_yp", mp_.virtual_ceil_yp_);
   node_->get_parameter("grid_map/virtual_ceil_yn", mp_.virtual_ceil_yn_);
   node_->get_parameter("grid_map/show_occ_time", mp_.show_occ_time_);
-  node_->get_parameter("grid_map/pose_type", mp_.pose_type_);
+  node_->get_parameter("grid_map/input_pose_message_type", mp_.input_pose_message_type_);
   node_->get_parameter("grid_map/frame_id", mp_.frame_id_);
   node_->get_parameter("grid_map/local_map_margin", mp_.local_map_margin_);
   node_->get_parameter("grid_map/ground_height", mp_.ground_height_);
@@ -148,7 +148,7 @@ void GridMap::initMap(rclcpp::Node::SharedPtr node)
       "/vins_estimator/extrinsic", 10,
       std::bind(&GridMap::extrinsicCallback, this, std::placeholders::_1));
 
-  if (mp_.pose_type_ == POSE_STAMPED)
+  if (mp_.input_pose_message_type_ == POSE_STAMPED)
   {
     pose_sub_ = std::make_shared<message_filters::Subscriber<geometry_msgs::msg::PoseStamped>>(
         node_, "grid_map/pose", rclcpp::QoS(25).get_rmw_qos_profile());
@@ -158,7 +158,7 @@ void GridMap::initMap(rclcpp::Node::SharedPtr node)
     sync_image_pose_->registerCallback(
         std::bind(&GridMap::depthPoseCallback, this, std::placeholders::_1, std::placeholders::_2));
   }
-  else if (mp_.pose_type_ == ODOMETRY)
+  else if (mp_.input_pose_message_type_ == ODOMETRY)
   {
     odom_sub_ = std::make_shared<message_filters::Subscriber<nav_msgs::msg::Odometry>>(
         node_, "grid_map/odom", rclcpp::QoS(100).get_rmw_qos_profile());

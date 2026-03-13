@@ -28,7 +28,7 @@ def generate_launch_description():
     cloud_topic = LaunchConfiguration('cloud_topic', default='/lidar_points')
     camera_pose_topic = LaunchConfiguration('camera_pose_topic', default='/camera_pose')
     # 同时输入 depth + pose + cloud：depth 与 pose 做时间同步，cloud 独立订阅
-    pose_type = LaunchConfiguration('pose_type', default=1)
+    input_pose_message_type = LaunchConfiguration('input_pose_message_type', default=1)
     frame_id = LaunchConfiguration('frame_id', default='odom')
     cx = LaunchConfiguration('cx', default='959.196655')
     cy = LaunchConfiguration('cy', default='538.812378')
@@ -53,9 +53,9 @@ def generate_launch_description():
     launch_plan.add_action(DeclareLaunchArgument('cloud_topic', default_value=cloud_topic,
                                         description='Point cloud topic'))
     launch_plan.add_action(DeclareLaunchArgument('camera_pose_topic', default_value=camera_pose_topic,
-                                        description='Camera pose topic (used when pose_type=1)'))
-    launch_plan.add_action(DeclareLaunchArgument('pose_type', default_value=pose_type,
-                                        description='grid_map pose_type: 1=PoseStamped, 2=Odometry'))
+                                        description='Camera pose topic (used when input_pose_message_type=1)'))
+    launch_plan.add_action(DeclareLaunchArgument('input_pose_message_type', default_value=input_pose_message_type,
+                                        description='grid_map 输入位姿话题消息类型: 1=PoseStamped, 2=Odometry'))
     launch_plan.add_action(DeclareLaunchArgument('frame_id', default_value=frame_id,
                                         description='Planning/map frame id (odom/map)'))
     launch_plan.add_action(DeclareLaunchArgument('cx', default_value=cx, description='Camera intrinsic cx'))
@@ -78,18 +78,18 @@ def generate_launch_description():
             'map_size_y_': map_size_y,
             'map_size_z_': map_size_z,
             'odometry_topic': odometry_topic,
-            'obj_num_set': obj_num,
+            'num_of_dynamic_objects': obj_num,
             'camera_pose_topic': camera_pose_topic,
             'depth_topic': depth_topic,
             'cloud_topic': cloud_topic,
             'cx': cx, 'cy': cy, 'fx': fx, 'fy': fy,
-            'pose_type': pose_type,
+            'input_pose_message_type': input_pose_message_type,
             'frame_id': frame_id,
 
             #规划器参数：不可从外部输入的，该处写好后固定的参数
             'max_vel': '2.0',  # 规划器允许的最大速度（单位：m/s）
             'max_acc': '6.0',  # 规划器允许的最大加速度（单位：m/s^2）
-            'planning_horizon': '7.5',  # 规划时间范围，向前看多长时间（单位：秒）
+            'path_ahead_time': '7.5',  # 规划时间范围，向前看多长时间（单位：秒）
             'try_more_paths_and_choose_best': 'True',  # 是否“多算几条不同路径再从中挑一条最优路径”
             'egoplanner_input_point_or_path': '3',  # EGO Planner 输入是“单点 / 预设点 / 参考路径”等模式开关
             'plan_xy_only': 'True',#是否只规划XY平面，不规划Z轴（True：只规划XY平面2维路径，False：规划XYZ 3维路径）

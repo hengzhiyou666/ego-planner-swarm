@@ -60,7 +60,7 @@ struct MappingParameters
   double resolution_, resolution_inv_;
   double obstacles_inflation_;
   string frame_id_;
-  int pose_type_;
+  int input_pose_message_type_;
 
   /* camera parameters */
   double cx_, cy_, fx_, fy_;

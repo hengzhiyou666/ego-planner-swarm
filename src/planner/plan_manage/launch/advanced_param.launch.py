@@ -5,10 +5,12 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 def generate_launch_description():
+
+    #======================告诉系统我要使用哪些变量，默认值是多少=================================================================
     # LaunchConfigurations
     map_size_x = LaunchConfiguration('map_size_x_', default=42.0)
-    map_size_y = LaunchConfiguration('map_size_y_', default=30.0)  # 原为30,0
-    map_size_z = LaunchConfiguration('map_size_z_', default=5.0)  # 原为5.0
+    map_size_y = LaunchConfiguration('map_size_y_', default=30.0)
+    map_size_z = LaunchConfiguration('map_size_z_', default=5.0)
     
     odometry_topic = LaunchConfiguration('odometry_topic', default='odometry')
     camera_pose_topic = LaunchConfiguration('camera_pose_topic', default='camera_pose')
@@ -24,7 +26,7 @@ def generate_launch_description():
     
     max_vel = LaunchConfiguration('max_vel', default=2.0)
     max_acc = LaunchConfiguration('max_acc', default=3.0)
-    planning_horizon = LaunchConfiguration('planning_horizon', default=7.5)
+    path_ahead_time = LaunchConfiguration('path_ahead_time', default=7.5)
     
     point_num = LaunchConfiguration('point_num', default=1)
     point0_x = LaunchConfiguration('point0_x', default=0.0)
@@ -45,13 +47,16 @@ def generate_launch_description():
 
     egoplanner_input_point_or_path = LaunchConfiguration('egoplanner_input_point_or_path', default=3)#输入模式：单点 / 预设点 / 参考路径
     try_more_paths_and_choose_best = LaunchConfiguration('try_more_paths_and_choose_best', default=True)
-    plan_xy_only = LaunchConfiguration('plan_xy_only', default=False)
+    plan_xy_only = LaunchConfiguration('plan_xy_only', default=True)
     
-    obj_num_set = LaunchConfiguration('obj_num_set', default=10)
+    num_of_dynamic_objects = LaunchConfiguration('num_of_dynamic_objects', default=10)
     
     drone_id = LaunchConfiguration('drone_id', default=0)
-    pose_type = LaunchConfiguration('pose_type', default=1)
+    input_pose_message_type = LaunchConfiguration('input_pose_message_type', default=2)  # 输入的位姿话题消息类型：1=PoseStamped，2=Odometry
 
+    #=======================================================================================
+
+    #=======================================================================================
     # DeclareLaunchArguments
     map_size_x_arg = DeclareLaunchArgument('map_size_x_', default_value=map_size_x, description='Map size along X')
     map_size_y_arg = DeclareLaunchArgument('map_size_y_', default_value=map_size_y, description='Map size along Y')
@@ -67,7 +72,7 @@ def generate_launch_description():
     fy_arg = DeclareLaunchArgument('fy', default_value=fy, description='Camera intrinsic fy')
     max_vel_arg = DeclareLaunchArgument('max_vel', default_value=max_vel, description='Maximum velocity')
     max_acc_arg = DeclareLaunchArgument('max_acc', default_value=max_acc, description='Maximum acceleration')
-    planning_horizon_arg = DeclareLaunchArgument('planning_horizon', default_value=planning_horizon, description='Planning horizon')
+    path_ahead_time_arg = DeclareLaunchArgument('path_ahead_time', default_value=path_ahead_time, description='规划时向前看的时间长度（秒）')
     
     point_num_arg = DeclareLaunchArgument('point_num', default_value=point_num, description='Number of waypoints')
     point0_x_arg = DeclareLaunchArgument('point0_x', default_value=point0_x, description='Waypoint 0 X coordinate')
@@ -95,10 +100,17 @@ def generate_launch_description():
         default_value=try_more_paths_and_choose_best,
         description='是否尝试多条不同路径并从中挑选一条最优路径')
     plan_xy_only_arg = DeclareLaunchArgument('plan_xy_only', default_value=plan_xy_only, description='Plan in XY only, force z=0 (e.g. for robot dog)')
-    obj_num_set_arg = DeclareLaunchArgument('obj_num_set', default_value=obj_num_set, description='Number of objects')
+    num_of_dynamic_objects_arg = DeclareLaunchArgument(
+        'num_of_dynamic_objects',
+        default_value=num_of_dynamic_objects,
+        description='场景中要考虑的动态物体（障碍物）个数')
     drone_id_arg = DeclareLaunchArgument('drone_id', default_value=drone_id, description='Drone ID')
-    pose_type_arg = DeclareLaunchArgument('pose_type', default_value=pose_type, description='grid_map pose type: 1=PoseStamped, 2=Odometry')
+    input_pose_message_type_arg = DeclareLaunchArgument(
+        'input_pose_message_type',
+        default_value=input_pose_message_type,
+        description='grid_map 输入位姿话题消息类型: 1=PoseStamped, 2=Odometry')
 
+    #=======================================================================================
     # Ego Planner Node
     ego_planner_node = Node(
         package='ego_planner',
@@ -129,7 +141,7 @@ def generate_launch_description():
             {'fsm/egoplanner_input_point_or_path': egoplanner_input_point_or_path},
             {'fsm/thresh_replan_time': 1.0},
             {'fsm/thresh_no_replan_meter': 1.0},
-            {'fsm/planning_horizon': planning_horizon},
+            {'fsm/path_ahead_time': path_ahead_time},
             {'fsm/planning_horizen_time': 3.0},
             {'fsm/emergency_time': 1.0},
             {'fsm/realworld_experiment': False},
@@ -188,7 +200,7 @@ def generate_launch_description():
             {'grid_map/virtual_ceil_height': 2.9},
             {'grid_map/visualization_truncate_height': 2.5},  # 原为1.8，可视化截断显示高度
             {'grid_map/show_occ_time': False},
-            {'grid_map/pose_type': pose_type},
+            {'grid_map/input_pose_message_type': input_pose_message_type},
             {'grid_map/frame_id': frame_id},
             # planner manager
             {'manager/max_vel': max_vel},
@@ -196,7 +208,7 @@ def generate_launch_description():
             {'manager/max_jerk': 4.0},
             {'manager/control_points_distance': 0.4},
             {'manager/feasibility_tolerance': 0.05},
-            {'manager/planning_horizon': planning_horizon},
+            {'manager/path_ahead_time': path_ahead_time},
             {'manager/try_more_paths_and_choose_best': try_more_paths_and_choose_best},
             {'manager/drone_id': drone_id},
             # Trajectory optimization parameters
@@ -215,57 +227,57 @@ def generate_launch_description():
             {'bspline/limit_ratio': 1.1},
 
             # Object prediction parameters
-            {'prediction/obj_num': obj_num_set},
+            {'prediction/obj_num': num_of_dynamic_objects},
             {'prediction/lambda': 1.0},
             {'prediction/predict_rate': 1.0}
         ]
     )
 
-    # Create LaunchDescription
-    ld = LaunchDescription()
+    #=======================================================================================
+    # Create LaunchDescription（启动计划本）
+    launch_plan = LaunchDescription()
 
-    # Add LaunchArguments
-    ld.add_action(map_size_x_arg)
-    ld.add_action(map_size_y_arg)
-    ld.add_action(map_size_z_arg)
-    ld.add_action(odometry_topic_arg)
-    ld.add_action(camera_pose_topic_arg)
-    ld.add_action(depth_topic_arg)
-    ld.add_action(cloud_topic_arg)
-    ld.add_action(frame_id_arg)
-    ld.add_action(cx_arg)
-    ld.add_action(cy_arg)
-    ld.add_action(fx_arg)
-    ld.add_action(fy_arg)
-    ld.add_action(max_vel_arg)
-    ld.add_action(max_acc_arg)
-    ld.add_action(planning_horizon_arg)
+    launch_plan.add_action(map_size_x_arg)
+    launch_plan.add_action(map_size_y_arg)
+    launch_plan.add_action(map_size_z_arg)
+    launch_plan.add_action(odometry_topic_arg)
+    launch_plan.add_action(camera_pose_topic_arg)
+    launch_plan.add_action(depth_topic_arg)
+    launch_plan.add_action(cloud_topic_arg)
+    launch_plan.add_action(frame_id_arg)
+    launch_plan.add_action(cx_arg)
+    launch_plan.add_action(cy_arg)
+    launch_plan.add_action(fx_arg)
+    launch_plan.add_action(fy_arg)
+    launch_plan.add_action(max_vel_arg)
+    launch_plan.add_action(max_acc_arg)
+    launch_plan.add_action(path_ahead_time_arg)
     
-    ld.add_action(point_num_arg)
-    ld.add_action(point0_x_arg)
-    ld.add_action(point0_y_arg)
-    ld.add_action(point0_z_arg)
-    ld.add_action(point1_x_arg)
-    ld.add_action(point1_y_arg)
-    ld.add_action(point1_z_arg)
-    ld.add_action(point2_x_arg)
-    ld.add_action(point2_y_arg)
-    ld.add_action(point2_z_arg)
-    ld.add_action(point3_x_arg)
-    ld.add_action(point3_y_arg)
-    ld.add_action(point3_z_arg)
-    ld.add_action(point4_x_arg)
-    ld.add_action(point4_y_arg)
-    ld.add_action(point4_z_arg)
+    launch_plan.add_action(point_num_arg)
+    launch_plan.add_action(point0_x_arg)
+    launch_plan.add_action(point0_y_arg)
+    launch_plan.add_action(point0_z_arg)
+    launch_plan.add_action(point1_x_arg)
+    launch_plan.add_action(point1_y_arg)
+    launch_plan.add_action(point1_z_arg)
+    launch_plan.add_action(point2_x_arg)
+    launch_plan.add_action(point2_y_arg)
+    launch_plan.add_action(point2_z_arg)
+    launch_plan.add_action(point3_x_arg)
+    launch_plan.add_action(point3_y_arg)
+    launch_plan.add_action(point3_z_arg)
+    launch_plan.add_action(point4_x_arg)
+    launch_plan.add_action(point4_y_arg)
+    launch_plan.add_action(point4_z_arg)
     
-    ld.add_action(egoplanner_input_point_or_path_arg)
-    ld.add_action(try_more_paths_and_choose_best_arg)
-    ld.add_action(plan_xy_only_arg)
-    ld.add_action(obj_num_set_arg)
-    ld.add_action(drone_id_arg)
-    ld.add_action(pose_type_arg)
+    launch_plan.add_action(egoplanner_input_point_or_path_arg)
+    launch_plan.add_action(try_more_paths_and_choose_best_arg)
+    launch_plan.add_action(plan_xy_only_arg)
+    launch_plan.add_action(num_of_dynamic_objects_arg)
+    launch_plan.add_action(drone_id_arg)
+    launch_plan.add_action(input_pose_message_type_arg)
 
     # Add Node
-    ld.add_action(ego_planner_node)
+    launch_plan.add_action(ego_planner_node)
 
-    return ld
+    return launch_plan
