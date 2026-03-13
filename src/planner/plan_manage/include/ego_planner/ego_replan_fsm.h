@@ -31,15 +31,16 @@ namespace ego_planner
 
   private:
     /* ---------- flag ---------- */
+    // 规划状态机执行状态：从初始化 → 等目标 → 生成/重规划轨迹 → 执行 → 必要时紧急停
     enum FSM_EXEC_STATE
     {
-      INIT,
-      WAIT_TARGET,
-      GEN_NEW_TRAJ,
-      REPLAN_TRAJ,
-      EXEC_TRAJ,
-      EMERGENCY_STOP,
-      SEQUENTIAL_START
+      INIT,             // 初始化
+      WAIT_TARGET,      // 等待目标（尚未收到目标点或参考路径）
+      GEN_NEW_TRAJ,     // 生成新轨迹（首次全局规划）
+      REPLAN_TRAJ,      // 重规划轨迹（飞行中局部/全局重规划）
+      EXEC_TRAJ,        // 执行轨迹（按当前轨迹飞行）
+      EMERGENCY_STOP,   // 紧急停止
+      SEQUENTIAL_START  // 顺序启动（多机/编队等场景）
     };
     enum TARGET_TYPE
     {
