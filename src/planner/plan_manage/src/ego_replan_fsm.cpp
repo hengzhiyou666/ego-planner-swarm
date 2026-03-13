@@ -80,10 +80,10 @@ namespace ego_planner
     if (planner_manager_->pp_.drone_id >= 1)
     {
       string sub_topic_name = string("/drone_") + std::to_string(planner_manager_->pp_.drone_id - 1) + string("_planning/swarm_paths");
-      swarm_paths_sub_ = node_->create_subscription<path_utils::msg::MultiBsplines>(
+      swarm_paths_sub_ = node_->create_subscription<path_tools::msg::MultiBsplines>(
           sub_topic_name,
           10,
-          [this](const std::shared_ptr<const path_utils::msg::MultiBsplines> &msg)
+          [this](const std::shared_ptr<const path_tools::msg::MultiBsplines> &msg)
           {
             this->swarmPathsCallback(msg);
           });
@@ -101,19 +101,19 @@ namespace ego_planner
       pub_topic_name = string("/drone_") + std::to_string(planner_manager_->pp_.drone_id) + string("_planning/swarm_paths");
     }
     
-    swarm_paths_pub_ = node_->create_publisher<path_utils::msg::MultiBsplines>(pub_topic_name, 10);
+    swarm_paths_pub_ = node_->create_publisher<path_tools::msg::MultiBsplines>(pub_topic_name, 10);
 
-    broadcast_bspline_pub_ = node_->create_publisher<path_utils::msg::Bspline>("planning/broadcast_bspline_from_planner", 10);
-    broadcast_bspline_sub_ = node_->create_subscription<path_utils::msg::Bspline>(
+    broadcast_bspline_pub_ = node_->create_publisher<path_tools::msg::Bspline>("planning/broadcast_bspline_from_planner", 10);
+    broadcast_bspline_sub_ = node_->create_subscription<path_tools::msg::Bspline>(
         "planning/broadcast_bspline_to_planner",
         100,
-        [this](const std::shared_ptr<const path_utils::msg::Bspline> &msg)
+        [this](const std::shared_ptr<const path_tools::msg::Bspline> &msg)
         {
           this->BroadcastBsplineCallback(msg);
         });
 
-    bspline_pub_ = node_->create_publisher<path_utils::msg::Bspline>("planning/bspline", 10);
-    data_disp_pub_ = node_->create_publisher<path_utils::msg::DataDisp>("planning/data_display", 100);
+    bspline_pub_ = node_->create_publisher<path_tools::msg::Bspline>("planning/bspline", 10);
+    data_disp_pub_ = node_->create_publisher<path_tools::msg::DataDisp>("planning/data_display", 100);
 
     if (target_type_ == TARGET_TYPE::MANUAL_TARGET)
     {
@@ -153,6 +153,8 @@ namespace ego_planner
 
       readGivenWps();
     }
+
+    //==============================选取全局路径中的靠近自身的一小段作为局部路径规划的目标路径============================================
     else if (target_type_ == TARGET_TYPE::REFENCE_PATH)
     {
       pct_path_sub_ = node_->create_subscription<nav_msgs::msg::Path>(
@@ -533,7 +535,7 @@ namespace ego_planner
     have_odom_ = true;
   }
 
-  void EGOReplanFSM::BroadcastBsplineCallback(const std::shared_ptr<const path_utils::msg::Bspline> &msg)
+  void EGOReplanFSM::BroadcastBsplineCallback(const std::shared_ptr<const path_tools::msg::Bspline> &msg)
   {
     size_t id = msg->drone_id;
     if ((int)id == planner_manager_->pp_.drone_id)
@@ -619,7 +621,7 @@ namespace ego_planner
     }
   }
 
-  void EGOReplanFSM::swarmPathsCallback(const std::shared_ptr<const path_utils::msg::MultiBsplines> &msg)
+  void EGOReplanFSM::swarmPathsCallback(const std::shared_ptr<const path_tools::msg::MultiBsplines> &msg)
   {
 
     multi_bspline_msgs_buf_.path.clear();
@@ -1110,7 +1112,7 @@ namespace ego_planner
 
       auto info = &planner_manager_->local_data_;
 
-      path_utils::msg::Bspline bspline;
+      path_tools::msg::Bspline bspline;
       bspline.order = 3;
       bspline.start_time = info->start_time_;
       bspline.path_id = info->path_id_;
@@ -1150,7 +1152,7 @@ namespace ego_planner
   {
     auto info = &planner_manager_->local_data_;
 
-    path_utils::msg::Bspline bspline;
+    path_tools::msg::Bspline bspline;
     bspline.order = 3;
     bspline.start_time = info->start_time_;
     bspline.drone_id = planner_manager_->pp_.drone_id;
@@ -1207,7 +1209,7 @@ namespace ego_planner
     auto info = &planner_manager_->local_data_;
 
     /* publish path */
-    path_utils::msg::Bspline bspline;
+    path_tools::msg::Bspline bspline;
     bspline.order = 3;
     bspline.start_time = info->start_time_;
     bspline.path_id = info->path_id_;

@@ -1,5 +1,5 @@
 #include <iostream>
-#include <path_utils/polynomial_path.h>
+#include <path_tools/polynomial_path.h>
 
 PolynomialPath PolynomialPath::minSnapPath(const Eigen::MatrixXd &Pos, const Eigen::Vector3d &start_vel,
                                            const Eigen::Vector3d &end_vel, const Eigen::Vector3d &start_acc,

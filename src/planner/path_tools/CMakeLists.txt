@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(path_utils)
+project(path_tools)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,7 +23,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
 
-rosidl_generate_interfaces(path_utils
+rosidl_generate_interfaces(path_tools
   "msg/Bspline.msg"
   "msg/DataDisp.msg"
   "msg/MultiBsplines.msg"
@@ -54,14 +54,14 @@ ament_export_include_directories(include)
 
 link_directories(${PCL_LIBRARY_DIRS})
 
-add_library( path_utils_lib SHARED
+add_library( path_tools_lib SHARED
     src/planning_visualization.cpp 
     src/polynomial_path.cpp 
     )
 
-ament_target_dependencies(path_utils_lib std_msgs geometry_msgs visualization_msgs rclcpp Eigen3 PCL)
+ament_target_dependencies(path_tools_lib std_msgs geometry_msgs visualization_msgs rclcpp Eigen3 PCL)
 
-install(TARGETS path_utils_lib
+install(TARGETS path_tools_lib
         DESTINATION lib
 )
 
@@ -69,6 +69,6 @@ install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION include/${PROJECT_NAME}/${PROJECT_NAME}
 )
 
-ament_export_libraries(path_utils_lib)
+ament_export_libraries(path_tools_lib)
 
 ament_package()

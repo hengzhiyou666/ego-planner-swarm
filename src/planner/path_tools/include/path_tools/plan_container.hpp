@@ -6,7 +6,7 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include <bspline_opt/uniform_bspline.h>
-#include <path_utils/polynomial_path.h>
+#include <path_tools/polynomial_path.h>
 
 using std::vector;
 

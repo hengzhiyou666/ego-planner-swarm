@@ -8,7 +8,7 @@
 #include <plan_env/obj_predictor.h>
 #include <rclcpp/rclcpp.hpp>
 #include "bspline_opt/lbfgs.hpp"
-#include <path_utils/plan_container.hpp>
+#include <path_tools/plan_container.hpp>
 
 // Gradient and elasitc band optimization
 

@@ -4,7 +4,7 @@
 
 本仓库已裁剪为 **ROS 2（Humble）机器狗地面规划版 EGO Planner**，仅保留规划相关功能，包含：
 
-- **规划相关**：ego_planner、plan_env、path_searching、bspline_opt、path_utils、drone_detect 等
+- **规划相关**：ego_planner、plan_env、path_searching、bspline_opt、path_tools、drone_detect 等
 - **已删除**：无人机仿真/控制/传感器相关包（原 `uav_simulator/*`）、swarm/仿真 launch 与桥接等非机器狗必需模块
 
 主入口包名为 **ego_planner**，launch 文件在 `src/planner/plan_manage/launch/`，推荐仅使用 `robot.launch.py`。
