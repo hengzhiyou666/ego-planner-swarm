@@ -140,7 +140,7 @@ def generate_launch_description():
 parameters=[
             # ========== 一、FSM / 任务相关参数 ==========
             {'fsm/egoplanner_input_point_or_path': egoplanner_input_point_or_path},  # 目标输入模式：单点 / 航路点 / 参考路径
-            {'fsm/thresh_replan_time': 1.0},                 # 触发时间重规划的时间阈值（s）
+            {'fsm/thresh_replan_time': 0.1},                 # 触发时间重规划的时间阈值（s）
             {'fsm/thresh_no_replan_meter': 0.5},             # 若位移小于该值则不触发重规划（m）
             {'fsm/path_ahead_time': path_ahead_time},        # FSM 规划向前看的时间（s），与 manager/path_ahead_time 对齐
             {'fsm/planning_horizen_time': 3.0},              # 规划时考虑的时间地平线（s）
