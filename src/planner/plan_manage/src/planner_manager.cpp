@@ -52,9 +52,10 @@ namespace ego_planner
     static int count = 0;
     printf("\033[47;30m\n[drone %d replan %d]==============================================\033[0m\n", pp_.drone_id, count++);
 
-    if ((start_pt - local_target_pt).norm() < 0.2)
+    double distance_to_goal = (start_pt - local_target_pt).norm();
+    if (distance_to_goal < 0.2)
     {
-      cout << "Close to goal" << endl;
+      cout << "到达目的地附近，reached the destination, distance_to_goal: " << distance_to_goal << endl;
       continous_failures_count_++;
       return false;
     }
@@ -90,6 +91,19 @@ namespace ego_planner
             point_set.push_back(pt);
           if ((point_set.back() - local_target_pt).norm() > 1e-3)
             point_set.back() = local_target_pt;
+
+          // 如果引导段太短，生成的点集数量过少（例如只有起点+两段引导点=3个点），
+          // 后续 B 样条拟合会失败并可能导致数值问题。此时直接退回到多项式初始化方案。
+          if (point_set.size() <= 3)
+          {
+            std::cout << "[reboundReplan]: guide segment too short ("
+                      << point_set.size()
+                      << " pts), fallback to polynomial init." << std::endl;
+            flag_force_polynomial = true;
+            flag_regenerate = true;
+            continue; // 重新进入 do{...}while，走下面的多项式初始化分支
+          }
+
           start_end_derivatives.push_back(start_vel);
           start_end_derivatives.push_back(local_target_vel);
           start_end_derivatives.push_back(start_acc);

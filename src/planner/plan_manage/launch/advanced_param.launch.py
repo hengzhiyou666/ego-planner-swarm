@@ -203,23 +203,25 @@ def generate_launch_description():
             {'grid_map/input_pose_message_type': input_pose_message_type},
             {'grid_map/frame_id': frame_id},
             # planner manager
-            {'manager/max_vel': max_vel},
-            {'manager/max_acc': max_acc},
-            {'manager/max_jerk': 4.0},
-            {'manager/control_points_distance': 0.4},
-            {'manager/feasibility_tolerance': 0.05},
-            {'manager/path_ahead_time': path_ahead_time},
-            {'manager/try_more_paths_and_choose_best': try_more_paths_and_choose_best},
-            {'manager/drone_id': drone_id},
-            # Trajectory optimization parameters
-            {'optimization/lambda_smooth': 1.0},
-            {'optimization/lambda_collision': 0.5},
-            {'optimization/lambda_feasibility': 0.1},
-            {'optimization/lambda_fitness': 1.0},
-            {'optimization/dist0': 0.5},
-            {'optimization/swarm_clearance': 0.5},
-            {'optimization/max_vel': max_vel},
-            {'optimization/max_acc': max_acc},
+            # ========== 轨迹管理相关参数（位置/速度/采样密度等） ==========
+            {'manager/max_vel': max_vel},               # 规划器允许的最大速度（m/s）
+            {'manager/max_acc': max_acc},               # 规划器允许的最大加速度（m/s^2）
+            {'manager/max_jerk': 4.0},                  # 允许的最大 jerk（加加速度），越大轨迹越“硬”
+            {'manager/control_points_distance': 0.4},   # 相邻控制点之间的期望间距（m），影响轨迹细腻程度
+            {'manager/feasibility_tolerance': 0.05},    # 可行性检查容差，略微放宽速度/加速度约束
+            {'manager/path_ahead_time': path_ahead_time},  # 规划向前看的时间范围（s），影响局部目标位置
+            {'manager/try_more_paths_and_choose_best': try_more_paths_and_choose_best},  # 是否尝试多条初始路径并选择代价最小的一条
+            {'manager/drone_id': drone_id},             # 无人机/机器人编号，用于区分多机规划
+
+            # ========== 轨迹优化代价函数权重（决定“更平滑”还是“更贴墙”等取舍） ==========
+            {'optimization/lambda_smooth': 1.0},        # 平滑项权重：越大轨迹越圆滑
+            {'optimization/lambda_collision': 0.5},     # 避障项权重：越大越“怕撞墙”，离障碍越远
+            {'optimization/lambda_feasibility': 0.1},   # 速度/加速度可行性项权重：越大越不容易超限
+            {'optimization/lambda_fitness': 5.0},       # 综合“贴合初始轨迹/参考路径”的约束权重，过小可能导致 refined 轨迹撞障
+            {'optimization/dist0': 0.5},                # 避障距离阈值（m），小于该距离开始急剧增加代价
+            {'optimization/swarm_clearance': 0.5},      # 群体间最小间距（m），用于多机避碰
+            {'optimization/max_vel': max_vel},          # 优化内部使用的最大速度限制（与 manager/max_vel 对齐）
+            {'optimization/max_acc': max_acc},          # 优化内部使用的最大加速度限制（与 manager/max_acc 对齐）
 
             # B-Spline parameters
             {'bspline/limit_vel': max_vel},
