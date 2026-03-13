@@ -137,18 +137,20 @@ def generate_launch_description():
             ('grid_map/depth', depth_topic),
             ('grid_map/occupancy_inflate', ['drone_', drone_id, '_grid/grid_map/occupancy_inflate'])
         ],
-        parameters=[
-            {'fsm/egoplanner_input_point_or_path': egoplanner_input_point_or_path},
-            {'fsm/thresh_replan_time': 1.0},
-            {'fsm/thresh_no_replan_meter': 0.5},
-            {'fsm/path_ahead_time': path_ahead_time},
-            {'fsm/planning_horizen_time': 3.0},
-            {'fsm/emergency_time': 1.0},
-            {'fsm/realworld_experiment': False},
-            {'fsm/fail_safe': True},
-            {'fsm/plan_xy_only': plan_xy_only},
-            
-            {'fsm/waypoint_num': point_num},
+parameters=[
+            # ========== 一、FSM / 任务相关参数 ==========
+            {'fsm/egoplanner_input_point_or_path': egoplanner_input_point_or_path},  # 目标输入模式：单点 / 航路点 / 参考路径
+            {'fsm/thresh_replan_time': 1.0},                 # 触发时间重规划的时间阈值（s）
+            {'fsm/thresh_no_replan_meter': 0.5},             # 若位移小于该值则不触发重规划（m）
+            {'fsm/path_ahead_time': path_ahead_time},        # FSM 规划向前看的时间（s），与 manager/path_ahead_time 对齐
+            {'fsm/planning_horizen_time': 3.0},              # 规划时考虑的时间地平线（s）
+            {'fsm/emergency_time': 1.0},                     # 紧急停止触发的时间阈值（s）
+            {'fsm/realworld_experiment': False},             # 是否为真实环境实验模式（影响安全策略）
+            {'fsm/fail_safe': True},                         # 是否启用失败保护（规划失败时进入 EMERGENCY_STOP 等）
+            {'fsm/plan_xy_only': plan_xy_only},              # 只在 XY 平面规划（机器狗等地面机器人）
+
+            # 预设航路点（当目标模式为 PRESET_TARGET 时使用）
+            {'fsm/waypoint_num': point_num},                 # 航路点数量
             {'fsm/waypoint0_x': point0_x},
             {'fsm/waypoint0_y': point0_y},
             {'fsm/waypoint0_z': point0_z},
@@ -164,45 +166,51 @@ def generate_launch_description():
             {'fsm/waypoint4_x': point4_x},
             {'fsm/waypoint4_y': point4_y},
             {'fsm/waypoint4_z': point4_z},
-            
-            {'grid_map/resolution': 0.1},
-            {'grid_map/map_size_x': map_size_x},
-            {'grid_map/map_size_y': map_size_y},
-            {'grid_map/map_size_z': map_size_z},
-            {'grid_map/local_update_range_x': 5.5},
-            {'grid_map/local_update_range_y': 5.5},
-            {'grid_map/local_update_range_z': 4.5},
-            {'grid_map/obstacles_inflation': 0.099},  # 障碍膨胀半径，太大容易将机器人包进障碍中
-            {'grid_map/local_map_margin': 10},  # 栅格边界预留margin（格数）
-            {'grid_map/ground_height': -5.0},  # 原为-0.01,地面高度z值
-            # camera parameter
+
+            # ========== 二、局部栅格地图 grid_map 基本尺寸与分辨率 ==========
+            {'grid_map/resolution': 0.1},                    # 栅格分辨率（m）
+            {'grid_map/map_size_x': map_size_x},             # 地图尺寸 X 方向（m）
+            {'grid_map/map_size_y': map_size_y},             # 地图尺寸 Y 方向（m）
+            {'grid_map/map_size_z': map_size_z},             # 地图尺寸 Z 方向（m）
+            {'grid_map/local_update_range_x': 5.5},          # 局部更新范围 X（m）
+            {'grid_map/local_update_range_y': 5.5},          # 局部更新范围 Y（m）
+            {'grid_map/local_update_range_z': 4.5},          # 局部更新范围 Z（m）
+            {'grid_map/obstacles_inflation': 0.099},         # 障碍膨胀半径，太大容易将机器人包进障碍中
+            {'grid_map/local_map_margin': 10},               # 栅格边界预留 margin（格数）
+            {'grid_map/ground_height': -5.0},                # 地面高度 z 值（以下视为地面/不可行）
+
+            # ========== 三、相机内参（用于深度/点云投影） ==========
             {'grid_map/cx': cx},
             {'grid_map/cy': cy},
             {'grid_map/fx': fx},
             {'grid_map/fy': fy},
-            # depth filter
-            {'grid_map/use_depth_filter': True},
-            {'grid_map/depth_filter_tolerance': 0.15},
-            {'grid_map/depth_filter_maxdist': 5.0},
-            {'grid_map/depth_filter_mindist': 0.2},
-            {'grid_map/depth_filter_margin': 4},  # 原为2,深度滤波时的像素，用于邻域判断
-            {'grid_map/k_depth_scaling_factor': 1.0}, # 原为1000
-            {'grid_map/skip_pixel': 4},  # 原为2,每隔多少像素取一个深度点（减少计算量）
-            # local fusion
-            {'grid_map/p_hit': 0.65},
-            {'grid_map/p_miss': 0.35},
-            {'grid_map/p_min': 0.12},
-            {'grid_map/p_max': 0.90},
-            {'grid_map/p_occ': 0.80},
-            {'grid_map/min_ray_length': 0.1},
-            {'grid_map/max_ray_length': 4.5},
-            
-            {'grid_map/virtual_ceil_height': 2.9},
-            {'grid_map/visualization_truncate_height': 2.5},  # 原为1.8，可视化截断显示高度
-            {'grid_map/show_occ_time': False},
-            {'grid_map/input_pose_message_type': input_pose_message_type},
-            {'grid_map/frame_id': frame_id},
-            # planner manager
+
+            # ========== 四、深度图过滤参数（去噪、稀疏采样） ==========
+            {'grid_map/use_depth_filter': True},             # 是否启用深度滤波
+            {'grid_map/depth_filter_tolerance': 0.15},       # 深度一致性容差（m）
+            {'grid_map/depth_filter_maxdist': 5.0},          # 最大深度有效距离（m）
+            {'grid_map/depth_filter_mindist': 0.2},          # 最小深度有效距离（m）
+            {'grid_map/depth_filter_margin': 4},             # 原为2，深度滤波时的像素邻域大小
+            {'grid_map/k_depth_scaling_factor': 1.0},        # 深度值缩放系数（原为 1000）
+            {'grid_map/skip_pixel': 4},                      # 原为2，每隔多少像素取一个深度点（减少计算量）
+
+            # ========== 五、局部概率融合（占据栅格更新参数） ==========
+            {'grid_map/p_hit': 0.65},                        # 观测为占据时的概率（命中）
+            {'grid_map/p_miss': 0.35},                       # 观测为空闲时的概率（脱靶）
+            {'grid_map/p_min': 0.12},                        # 概率下限
+            {'grid_map/p_max': 0.90},                        # 概率上限
+            {'grid_map/p_occ': 0.80},                        # 判定为障碍的占据概率阈值
+            {'grid_map/min_ray_length': 0.1},                # 射线最小长度（m）
+            {'grid_map/max_ray_length': 4.5},                # 射线最大长度（m）
+
+            # ========== 六、可视化 & 坐标系设置 ==========
+            {'grid_map/virtual_ceil_height': 2.9},           # 虚拟天花板高度（m），限制飞行高度
+            {'grid_map/visualization_truncate_height': 2.5}, # 原为1.8，可视化截断显示高度
+            {'grid_map/show_occ_time': False},               # 是否显示每个栅格的更新时间
+            {'grid_map/input_pose_message_type': input_pose_message_type},  # 输入位姿消息类型（1=PoseStamped,2=Odometry）
+            {'grid_map/frame_id': frame_id},                 # 地图/规划坐标系（如 odom/map）
+
+            # ========== 七、规划器管理与优化参数 ==========
             # ========== 轨迹管理相关参数（位置/速度/采样密度等） ==========
             {'manager/max_vel': max_vel},               # 规划器允许的最大速度（m/s）
             {'manager/max_acc': max_acc},               # 规划器允许的最大加速度（m/s^2）
