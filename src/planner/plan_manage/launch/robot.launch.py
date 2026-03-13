@@ -90,7 +90,7 @@ def generate_launch_description():
             'max_vel': '2.0',  # 规划器允许的最大速度（单位：m/s）
             'max_acc': '6.0',  # 规划器允许的最大加速度（单位：m/s^2）
             'planning_horizon': '7.5',  # 规划时间范围，向前看多长时间（单位：秒）
-            'use_distinctive_trajs': 'True',#是否使用独特轨迹（True：使用，False：不使用）#多算几条长得不一样的轨迹，然后从里面挑最好的那一条
+            'try_more_paths_and_choose_best': 'True',  # 是否“多算几条不同路径再从中挑一条最优路径”
             'egoplanner_input_point_or_path': '3',  # EGO Planner 输入是“单点 / 预设点 / 参考路径”等模式开关
             'plan_xy_only': 'True',#是否只规划XY平面，不规划Z轴（True：只规划XY平面2维路径，False：规划XYZ 3维路径）
             'point_num': '4',

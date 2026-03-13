@@ -18,7 +18,7 @@ namespace ego_planner
     node->declare_parameter("manager/feasibility_tolerance", 0.0);
     node->declare_parameter("manager/control_points_distance", -1.0);
     node->declare_parameter("manager/planning_horizon", 5.0);
-    node->declare_parameter("manager/use_distinctive_trajs", false);
+    node->declare_parameter("manager/try_more_paths_and_choose_best", false);
     node->declare_parameter("manager/drone_id", -1);
 
     node->get_parameter("manager/max_vel", pp_.max_vel_);
@@ -27,7 +27,7 @@ namespace ego_planner
     node->get_parameter("manager/feasibility_tolerance", pp_.feasibility_tolerance_);
     node->get_parameter("manager/control_points_distance", pp_.ctrl_pt_dist);
     node->get_parameter("manager/planning_horizon", pp_.planning_horizen_);
-    node->get_parameter("manager/use_distinctive_trajs", pp_.use_distinctive_trajs);
+    node->get_parameter("manager/try_more_paths_and_choose_best", pp_.try_more_paths_and_choose_best);
     node->get_parameter("manager/drone_id", pp_.drone_id);
 
     local_data_.traj_id_ = 0;
@@ -247,7 +247,7 @@ namespace ego_planner
     bool flag_step_1_success = false;
     vector<vector<Eigen::Vector3d>> vis_trajs;
 
-    if (pp_.use_distinctive_trajs)
+    if (pp_.try_more_paths_and_choose_best)
     {
       // cout << "enter" << endl;
       std::vector<ControlPoints> trajs = bspline_optimizer_->distinctiveTrajs(segments);

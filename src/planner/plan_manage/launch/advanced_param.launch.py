@@ -43,8 +43,8 @@ def generate_launch_description():
     point4_y = LaunchConfiguration('point4_y', default=30.0)
     point4_z = LaunchConfiguration('point4_z', default=1.0)
 
-    egoplanner_input_point_or_path = LaunchConfiguration('egoplanner_input_point_or_path', default=2)
-    use_distinctive_trajs = LaunchConfiguration('use_distinctive_trajs', default=True)
+    egoplanner_input_point_or_path = LaunchConfiguration('egoplanner_input_point_or_path', default=3)#输入模式：单点 / 预设点 / 参考路径
+    try_more_paths_and_choose_best = LaunchConfiguration('try_more_paths_and_choose_best', default=True)
     plan_xy_only = LaunchConfiguration('plan_xy_only', default=False)
     
     obj_num_set = LaunchConfiguration('obj_num_set', default=10)
@@ -90,7 +90,10 @@ def generate_launch_description():
         'egoplanner_input_point_or_path',
         default_value=egoplanner_input_point_or_path,
         description='EGO Planner 输入是“单点 / 预设点 / 路径”等模式')
-    use_distinctive_trajs_arg = DeclareLaunchArgument('use_distinctive_trajs', default_value=use_distinctive_trajs, description='Use distinctive trajectories')
+    try_more_paths_and_choose_best_arg = DeclareLaunchArgument(
+        'try_more_paths_and_choose_best',
+        default_value=try_more_paths_and_choose_best,
+        description='是否尝试多条不同路径并从中挑选一条最优路径')
     plan_xy_only_arg = DeclareLaunchArgument('plan_xy_only', default_value=plan_xy_only, description='Plan in XY only, force z=0 (e.g. for robot dog)')
     obj_num_set_arg = DeclareLaunchArgument('obj_num_set', default_value=obj_num_set, description='Number of objects')
     drone_id_arg = DeclareLaunchArgument('drone_id', default_value=drone_id, description='Drone ID')
@@ -194,7 +197,7 @@ def generate_launch_description():
             {'manager/control_points_distance': 0.4},
             {'manager/feasibility_tolerance': 0.05},
             {'manager/planning_horizon': planning_horizon},
-            {'manager/use_distinctive_trajs': use_distinctive_trajs},
+            {'manager/try_more_paths_and_choose_best': try_more_paths_and_choose_best},
             {'manager/drone_id': drone_id},
             # Trajectory optimization parameters
             {'optimization/lambda_smooth': 1.0},
@@ -256,7 +259,7 @@ def generate_launch_description():
     ld.add_action(point4_z_arg)
     
     ld.add_action(egoplanner_input_point_or_path_arg)
-    ld.add_action(use_distinctive_trajs_arg)
+    ld.add_action(try_more_paths_and_choose_best_arg)
     ld.add_action(plan_xy_only_arg)
     ld.add_action(obj_num_set_arg)
     ld.add_action(drone_id_arg)
