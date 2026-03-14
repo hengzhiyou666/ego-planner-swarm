@@ -158,7 +158,7 @@ namespace ego_planner
     }
 
     //==============================选取全局路径中的靠近自身的一小段作为局部路径规划的目标路径============================================
-    else if (target_type_ == TARGET_TYPE::REFENCE_PATH)
+    else if (target_type_ == TARGET_TYPE::USE_GLOBAL_PATH)
     {
       pct_path_sub_ = node_->create_subscription<nav_msgs::msg::Path>(
           "/pct_path",
@@ -168,7 +168,7 @@ namespace ego_planner
             this->pctPathCallback(msg);
           });
 
-      RCLCPP_INFO(node_->get_logger(), "REFENCE_PATH mode: waiting for /pct_path and odom.");
+      RCLCPP_INFO(node_->get_logger(), "USE_GLOBAL_PATH mode: waiting for /pct_path and odom.");
     }
     else
       cout << "Wrong target_type_ value! target_type_=" << target_type_ << endl;
@@ -193,8 +193,8 @@ namespace ego_planner
 
     wp_id_ = 0;
 
-    // REFENCE_PATH 且多路点：第一个目标点 = “最近点沿路径前进约2m处”，再沿路径到终点
-    if (target_type_ == TARGET_TYPE::REFENCE_PATH && waypoint_num_ > 1)
+    // USE_GLOBAL_PATH 且多路点：第一个目标点 = “最近点沿路径前进约2m处”，再沿路径到终点
+    if (target_type_ == TARGET_TYPE::USE_GLOBAL_PATH && waypoint_num_ > 1)
     {
       auto closestOnSegment = [](const Eigen::Vector3d &p, const Eigen::Vector3d &a, const Eigen::Vector3d &b,
                                  Eigen::Vector3d &out_closest, double &out_t) -> double {
@@ -369,14 +369,14 @@ namespace ego_planner
       // 全路径规划失败时退化为只规划到第一个路点
     }
 
-    // 非 REFENCE_PATH：用 visualization_->displayGoalPoint() 方法对waypoint进行可视化
+    // 非 USE_GLOBAL_PATH：用 visualization_->displayGoalPoint() 方法对waypoint进行可视化
     for (size_t i = 0; i < (size_t)waypoint_num_; i++)
     {
       visualization_->displayGoalPoint(wps_[i], Eigen::Vector4d(0, 0.5, 0.5, 1), 0.3, i);
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
-    // 单路点或非 REFENCE_PATH 或上面全路径规划失败：只规划到第一个路点
+    // 单路点或非 USE_GLOBAL_PATH 或上面全路径规划失败：只规划到第一个路点
     planNextWaypoint(wps_[wp_id_]);
   }
 
@@ -574,7 +574,7 @@ namespace ego_planner
 
     // 标记“已经有一条参考路径了”，并把它当作一次“开始规划”的触发信号
     have_pct_path_ = true;
-    have_trigger_ = true; /* REFENCE_PATH 下用收到路径作为触发 */
+    have_trigger_ = true; /* USE_GLOBAL_PATH 下用收到路径作为触发 */
 
     // 8）把采样好的 waypoints_ 转换成内部的 wps_ 向量，并调用原有多路点规划逻辑
     readGivenWps();
@@ -939,7 +939,7 @@ namespace ego_planner
       else
       {
         /* “Close to goal” 时规划会失败，视为已到达当前路点，切下一路点或结束 */
-        if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::REFENCE_PATH) &&
+        if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::USE_GLOBAL_PATH) &&
             (odom_pos_ - end_pt_).norm() < no_replan_thresh_)
         {
           if (wp_id_ < waypoint_num_ - 1)
@@ -971,7 +971,7 @@ namespace ego_planner
       else
       {
         /* “Close to goal” 时规划会失败，视为已到达当前路点，切下一路点或结束 */
-        if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::REFENCE_PATH) &&
+        if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::USE_GLOBAL_PATH) &&
             (odom_pos_ - end_pt_).norm() < no_replan_thresh_)
         {
           if (wp_id_ < waypoint_num_ - 1)
@@ -1004,7 +1004,7 @@ namespace ego_planner
       Eigen::Vector3d pos = info->position_path_.evaluateDeBoorT(t_cur);
 
       /* && (end_pt_ - pos).norm() < 0.5 */
-      if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::REFENCE_PATH) &&
+      if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::USE_GLOBAL_PATH) &&
           (wp_id_ < waypoint_num_ - 1) &&
           (end_pt_ - pos).norm() < no_replan_thresh_)
       {
@@ -1023,7 +1023,7 @@ namespace ego_planner
             wp_id_ = 0;
             planNextWaypoint(wps_[wp_id_]);
           }
-          /* REFENCE_PATH: 跑完当前路径后进入 WAIT_TARGET，等待新 /pct_path，不自动循环 */
+          /* USE_GLOBAL_PATH: 跑完当前路径后进入 WAIT_TARGET，等待新 /pct_path，不自动循环 */
 
           changeFSMExecState(WAIT_TARGET, "FSM");
           goto force_return;
@@ -1376,8 +1376,8 @@ namespace ego_planner
 
   void EGOReplanFSM::getLocalTarget()
   {
-    // REFENCE_PATH 模式：引导段取自 /pct_path_unfinished 前 7m 且去掉最前两点的 pct_guide_segment_
-    if (target_type_ == TARGET_TYPE::REFENCE_PATH && !pct_guide_segment_.empty())
+    // USE_GLOBAL_PATH 模式：引导段取自 /pct_path_unfinished 前 7m 且去掉最前两点的 pct_guide_segment_
+    if (target_type_ == TARGET_TYPE::USE_GLOBAL_PATH && !pct_guide_segment_.empty())
     {
       planner_manager_->setLocalGuideSegment(pct_guide_segment_);
       local_target_pt_ = pct_guide_segment_.back();

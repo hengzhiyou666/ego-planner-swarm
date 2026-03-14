@@ -52,6 +52,7 @@ namespace ego_planner
                                         Eigen::Vector3d start_acc, Eigen::Vector3d local_target_pt,
                                         Eigen::Vector3d local_target_vel, bool flag_polyInit, bool flag_randomPolyTraj)
   {
+    // ==================== 模块 0：入口与前置检查 ====================
     static int count = 0;
     printf("\033[47;30m\n[drone %d replan %d]==============================================\033[0m\n", pp_.drone_id, count++);
 
@@ -63,15 +64,13 @@ namespace ego_planner
       return false;
     }
 
-    bspline_optimizer_->setLocalTargetPt(local_target_pt);
-
+    bspline_optimizer_->setLocalTargetPt(local_target_pt);//函数体只有一个赋值操作：{ local_target_pt_ = local_target_pt; }
     rclcpp::Time t_start = rclcpp::Clock().now();
     rclcpp::Duration t_init(0, 0), t_opt(0, 0), t_refine(0, 0);
 
-    /*** STEP 1: INIT
-    根据起始点和目标点的距离计算首个时间步长ts,向量的模大于0.1则用1.5倍否则用5倍
-    ***/
-    double ts = (start_pt - local_target_pt).norm() > 0.1 ? pp_.ctrl_pt_dist / pp_.max_vel_ * 1.5 : pp_.ctrl_pt_dist / pp_.max_vel_ * 5; // pp_.ctrl_pt_dist / pp_.max_vel_ is too tense, and will surely exceed the acc/vel limits
+    // ==================== 模块 1：生成初始路径点集（STEP 1 INIT） ====================
+    // 根据起点与目标点距离计算时间步长 ts（距离>0.1 用 1.5 倍，否则用 5 倍，保证控制点间距合理）
+    double ts = (start_pt - local_target_pt).norm() > 0.1 ? pp_.ctrl_pt_dist / pp_.max_vel_ * 1.5 : pp_.ctrl_pt_dist / pp_.max_vel_ * 5;
     vector<Eigen::Vector3d> point_set, start_end_derivatives;
     static bool flag_first_call = true, flag_force_polynomial = false;
     bool flag_regenerate = false;
@@ -81,9 +80,8 @@ namespace ego_planner
       start_end_derivatives.clear();
       flag_regenerate = false;
 
-      // 这里如果正常进入 if（通常为初次生成），则 do 部分只进行一次；
-      // 若进入 else 则有可能对异常情况重置 flag_regenerate 并再 do 一次。
-      if (flag_first_call || flag_polyInit || flag_force_polynomial /*|| ( start_pt - local_target_pt ).norm() < 1.0*/) // Initial path generated from a min-snap traj by order.
+      // 分支 A：首次规划 / 强制多项式 / 需要重新生成 → 用“引导段”或“多项式”得到一串路径点
+      if (flag_first_call || flag_polyInit || flag_force_polynomial /*|| ( start_pt - local_target_pt ).norm() < 1.0*/)
       {
         flag_first_call = false;
         flag_force_polynomial = false;
@@ -176,9 +174,9 @@ namespace ego_planner
           start_end_derivatives.push_back(gl_path.evaluateAcc(t));
         }
       }
-      else // Initial path generated from previous trajectory.
+      // 分支 B：非首次且不强制多项式 → 从当前正在执行的轨迹上“截取从当前时刻往后”的一段，再按弧长采样得到点集
+      else
       {
-
         double t;
         double t_cur = (rclcpp::Clock().now() - local_data_.start_time_).seconds();
 
@@ -255,18 +253,18 @@ namespace ego_planner
       }
     } while (flag_regenerate);
 
-    // 将轨迹变为B样条轨迹
+    // ==================== 模块 2：点集转 B 样条控制点 ====================
+    // 用起点/终点速度加速度约束，把 point_set 拟合成一条 B 样条，得到控制点 ctrl_pts；再初始化优化器用的分段信息
     Eigen::MatrixXd ctrl_pts, ctrl_pts_temp;
     UniformBspline::parameterizeToBspline(ts, point_set, start_end_derivatives, ctrl_pts);
 
     vector<std::pair<int, int>> segments;
     segments = bspline_optimizer_->initControlPoints(ctrl_pts, true);
-    // 计算时间差并更新时间
     auto now = rclcpp::Clock().now();
     t_init = now - t_start;
     t_start = now;
 
-    /*** STEP 2: OPTIMIZE ***/
+    // ==================== 模块 3：B 样条优化（避障 + 平滑，STEP 2 OPTIMIZE） ====================
     bool flag_step_1_success = false;
     vector<vector<Eigen::Vector3d>> vis_paths;
 
@@ -331,8 +329,8 @@ namespace ego_planner
     UniformBspline pos = UniformBspline(ctrl_pts, 3, ts);
     pos.setPhysicalLimits(pp_.max_vel_, pp_.max_acc_, pp_.feasibility_tolerance_);
 
-    /*** STEP 3: REFINE(RE-ALLOCATE TIME) IF NECESSARY ***/
-    // Note: Only adjust time in single drone mode. But we still allow drone_0 to adjust its time profile.
+    // ==================== 模块 4：时间重分配（STEP 3 REFINE） ====================
+    // 若速度/加速度超限，则拉长时间轴重新参数化并再优化一次；仅单机或 drone_0 时启用
     if (pp_.drone_id <= 0)
     {
 
@@ -365,10 +363,9 @@ namespace ego_planner
       }
     }
 
-    // t_refine = ros::Time::now() - t_start;
     t_refine = rclcpp::Clock().now() - t_start;
 
-    // save planned results
+    // ==================== 模块 5：保存结果并返回 ====================
     updatePathInfo(pos, rclcpp::Clock().now());
 
     static double sum_time = 0;
