@@ -34,7 +34,7 @@ namespace ego_planner
     // 规划状态机执行状态：从初始化 → 等目标 → 生成/重规划轨迹 → 执行 → 必要时紧急停
     enum FSM_EXEC_STATE
     {
-      INIT,             // 初始化
+      STATE_ONE__WAIT_FOR_ODOM,             // 初始化
       WAIT_TARGET,      // 等待目标（尚未收到目标点或参考路径）
       GEN_NEW_PATH,     // 生成新路径（首次全局规划）
       REPLAN_PATH,      // 重规划路径（飞行中局部/全局重规划）
@@ -68,7 +68,7 @@ namespace ego_planner
     /* planning data */
     bool have_trigger_, have_target_, have_odom_, have_new_target_, have_recv_pre_agent_;
     bool have_pct_path_{false};
-    FSM_EXEC_STATE exec_state_;
+    FSM_EXEC_STATE current_state_;
     int continously_called_times_{0};
 
     Eigen::Vector3d odom_pos_, odom_vel_, odom_acc_; // odometry state
@@ -112,7 +112,7 @@ namespace ego_planner
     /* return value: std::pair< Times of the same state be continuously called, current continuously called state > */
     void changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call);
     std::pair<int, EGOPlannerStateMachine::FSM_EXEC_STATE> timesOfConsecutiveStateCalls();
-    void printFSMExecState();
+    void printCurrentState();
 
     void readGivenWps();
     void pctPathCallback(const std::shared_ptr<const nav_msgs::msg::Path> &msg);
@@ -120,7 +120,7 @@ namespace ego_planner
     void getLocalTarget();
 
     /* ROS functions */
-    void execFSMCallback();
+    void runWhichStateNow_10ms();
     void checkCollisionCallback();
     void waypointCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg);
     void triggerCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg);

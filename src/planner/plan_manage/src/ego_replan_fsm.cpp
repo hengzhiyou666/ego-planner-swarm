@@ -1,4 +1,3 @@
-
 #include <ego_planner/ego_replan_fsm.h>
 #include <limits>
 
@@ -11,7 +10,7 @@ namespace ego_planner
     
     current_wp_ = 0;
     have_pct_path_ = false;
-    exec_state_ = FSM_EXEC_STATE::INIT;
+    current_state_ = FSM_EXEC_STATE::STATE_ONE__WAIT_FOR_ODOM;
     have_target_ = false;
     have_odom_ = false;
     have_recv_pre_agent_ = false;
@@ -65,7 +64,7 @@ namespace ego_planner
     /* callback */
     // 执行定时器：每 10 ms 调用一次 FSM 回调，驱动状态机执行与轨迹跟踪
     exec_timer_ = node_->create_wall_timer(std::chrono::milliseconds(10),
-                                           std::bind(&EGOPlannerStateMachine::execFSMCallback, this));
+                                           std::bind(&EGOPlannerStateMachine::runWhichStateNow_10ms, this));
 
     // 安全定时器：每 100 ms 调用一次碰撞检测回调，检查障碍物并触发重规划
     safety_timer_ = node_->create_wall_timer(std::chrono::milliseconds(100),
@@ -362,7 +361,7 @@ namespace ego_planner
         }
         visualization_->displayGlobalPathList(global_path, 0.1, 0);
 
-        if (exec_state_ == WAIT_TARGET)
+        if (current_state_ == WAIT_TARGET)
           changeFSMExecState(GEN_NEW_PATH, "TRIG");
         else
           changeFSMExecState(REPLAN_PATH, "TRIG");
@@ -609,7 +608,7 @@ namespace ego_planner
       have_new_target_ = true;
 
       /*** FSM状态转换 ***/
-      if (exec_state_ == WAIT_TARGET)
+      if (current_state_ == WAIT_TARGET)
         changeFSMExecState(GEN_NEW_PATH, "TRIG");
       else
       {
@@ -838,52 +837,53 @@ namespace ego_planner
   void EGOPlannerStateMachine::changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call)
   {
 
-    if (new_state == exec_state_)
+    if (new_state == current_state_)
       continously_called_times_++;
     else
       continously_called_times_ = 1;
 
-    static string state_str[7] = {"INIT", "WAIT_TARGET", "GEN_NEW_PATH", "REPLAN_PATH", "EXEC_PATH", "EMERGENCY_STOP"};
-    int pre_s = int(exec_state_);
-    exec_state_ = new_state;
+    static string state_str[7] = {"STATE_ONE__WAIT_FOR_ODOM", "WAIT_TARGET", "GEN_NEW_PATH", "REPLAN_PATH", "EXEC_PATH", "EMERGENCY_STOP"};
+    int pre_s = int(current_state_);
+    current_state_ = new_state;
     cout << "[" + pos_call + "]: from " + state_str[pre_s] + " to " + state_str[int(new_state)] << endl;
   }
 
   std::pair<int, EGOPlannerStateMachine::FSM_EXEC_STATE> EGOPlannerStateMachine::timesOfConsecutiveStateCalls()
   {
-    return std::pair<int, FSM_EXEC_STATE>(continously_called_times_, exec_state_);
+    return std::pair<int, FSM_EXEC_STATE>(continously_called_times_, current_state_);
   }
 
-  void EGOPlannerStateMachine::printFSMExecState()
+  void EGOPlannerStateMachine::printCurrentState()
   {
-    static string state_str[7] = {"INIT", "WAIT_TARGET", "GEN_NEW_PATH", "REPLAN_PATH", "EXEC_PATH", "EMERGENCY_STOP"};
+    static string state_str[7] = {"STATE_ONE__WAIT_FOR_ODOM", "WAIT_TARGET", "GEN_NEW_PATH", "REPLAN_PATH", "EXEC_PATH", "EMERGENCY_STOP"};
 
-    cout << "[FSM]: state: " + state_str[int(exec_state_)] << endl;
+    cout << "[FSM]: state: " + state_str[int(current_state_)] << endl;
+    cout << "当前状态是: " + state_str[int(current_state_)] << endl;
   }
 
-  // 状态机主循环（由 10ms 定时器周期性调用）：根据当前 exec_state_ 执行对应逻辑并驱动状态迁移（INIT→WAIT_TARGET→规划→EXEC_PATH/REPLAN_PATH 等）
-  void EGOPlannerStateMachine::execFSMCallback()
+  // 状态机主循环（由 10ms 定时器周期性调用）：根据当前 current_state_ 执行对应逻辑并驱动状态迁移（STATE_ONE__WAIT_FOR_ODOM→WAIT_TARGET→规划→EXEC_PATH/REPLAN_PATH 等）
+  void EGOPlannerStateMachine::runWhichStateNow_10ms()
   {
     // ----- 防止本次回调还没跑完、下一次又来了，先停掉定时器，最后再 reset -----
     exec_timer_->cancel(); // To avoid blockage
 
     // ----- 每跑满 100 次就打印一次当前状态和“有没有 odom/目标”，方便看日志 -----
-    static int fsm_num = 0;
-    fsm_num++;
-    if (fsm_num == 100)
+    static int already_run_times_10ms = 0;
+    already_run_times_10ms++;
+    if (already_run_times_10ms == 100)
     {
-      printFSMExecState();
+      printCurrentState();
       if (!have_odom_)
         cout << "no odom，无法知道当前位置" << endl;
       if (!have_target_)
         cout << "wait for goal or trigger，等待输入目的地" << endl;
-      fsm_num = 0;
+      already_run_times_10ms = 0;
     }
 
-    switch (exec_state_)
+    switch (current_state_)
     {
     // ----- 初始化：有里程计了就切到“等目标”，没有就啥也不干直接走人 -----
-    case INIT:
+    case STATE_ONE__WAIT_FOR_ODOM:
     {
       if (!have_odom_)
       {
@@ -897,45 +897,46 @@ namespace ego_planner
     case WAIT_TARGET:
     {
       if (!have_target_ || !have_trigger_)
+        //如果have_target_和have_trigger_有一个没有，或者两个都没有，就返回，不进行任何操作
         goto force_return;
       else
       {
+        //如果have_target_和have_trigger_都有了，就进“生成新路径”去算第一条轨迹
         changeFSMExecState(GEN_NEW_PATH, "FSM");
       }
       break;
     }
 
-    // ----- 生成新路径：从当前位置算一条新的全局+局部轨迹；成功就“执行”，失败且已经靠近终点就切下一路点或回“等目标” -----
+    // ----- 生成新路径：从当前位置算一条全新的全局+局部轨迹；成功就“执行”，失败且已经靠近终点就切下一路点或回“等目标” -----
     case GEN_NEW_PATH:
     {
-
-      bool success = planFromGlobalPath(10); // zx-todo
+      bool success = planFromGlobalPath(10); // 从当前 odom 算一条新路径，最多试 10 次
       if (success)
       {
-        changeFSMExecState(EXEC_PATH, "FSM");
+        changeFSMExecState(EXEC_PATH, "FSM"); // 成功则进入“执行”
         flag_escape_emergency_ = true;
         publishSwarmPaths(false);
       }
       else
       {
-        /* “Close to goal” 时规划会失败，视为已到达当前路点，切下一路点或结束 */
+        // 失败时：若已是“预设/全局路径”且当前位置离终点很近，视为到达当前路点
         if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::USE_GLOBAL_PATH) &&
             (odom_pos_ - end_pt_).norm() < no_replan_thresh_)
         {
           if (wp_id_ < waypoint_num_ - 1)
           {
-            wp_id_++;
+            wp_id_++;                      // 还有下一路点：切到下一路点再规划
             planNextWaypoint(wps_[wp_id_]);
           }
           else
           {
-            have_target_ = false;
+            have_target_ = false;           // 已是最后一个路点：清目标与触发，回“等目标”
             have_trigger_ = false;
             changeFSMExecState(WAIT_TARGET, "FSM");
           }
         }
         else
-          changeFSMExecState(GEN_NEW_PATH, "FSM");
+          changeFSMExecState(GEN_NEW_PATH, "FSM"); // 否则继续留在本状态，下次再试
       }
       break;
     }
@@ -1130,7 +1131,7 @@ namespace ego_planner
     LocalPathData *info = &planner_manager_->local_data_;
     auto map = planner_manager_->grid_map_;
     
-    if (exec_state_ == WAIT_TARGET || info->start_time_.seconds() < 1e-5)
+    if (current_state_ == WAIT_TARGET || info->start_time_.seconds() < 1e-5)
       return;
 
     /* ---------- check lost of depth ---------- */
