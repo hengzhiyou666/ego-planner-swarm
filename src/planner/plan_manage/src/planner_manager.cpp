@@ -54,7 +54,7 @@ namespace ego_planner
   {
     // ==================== 模块 0：入口与前置检查 ====================
     static int count = 0;
-    printf("\033[47;30m\n[drone %d replan %d]==============================================\033[0m\n", pp_.drone_id, count++);
+    printf("\033[47;30m\n[robot replan 第%d次规划局部路径，开始规划...]==============================================\033[0m\n", count++);
 
     double distance_to_goal = (start_pt - local_target_pt).norm();
     if (distance_to_goal < 0.2)
@@ -396,6 +396,7 @@ namespace ego_planner
     return true;
   }
 
+  /** 检查本机轨迹与指定无人机 drone_id 的轨迹在时间重叠段内是否小于群控间距：若存在某时刻距离 < swarm_clearance 则返回 true（发生碰撞），否则返回 false。 */
   bool EGOPlannerManager::checkCollision(int drone_id)
   {
     // if (local_data_.start_time_.toSec() < 1e9) // It means my first planning has not started

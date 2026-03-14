@@ -71,7 +71,7 @@ namespace ego_planner
     FSM_EXEC_STATE current_state_;
     int continously_called_times_{0};
 
-    Eigen::Vector3d odom_pos_, odom_vel_, odom_acc_; // odometry state
+    Eigen::Vector3d robot_location_now_, odom_vel_, odom_acc_; // odometry state
     Eigen::Quaterniond odom_orient_;
 
     Eigen::Vector3d init_pt_, start_pt_, start_vel_, start_acc_, start_yaw_; // start state
@@ -115,7 +115,7 @@ namespace ego_planner
     void printCurrentState();
 
     void readGivenWps();
-    void pctPathCallback(const std::shared_ptr<const nav_msgs::msg::Path> &msg);
+    void pctPathCallback(const std::shared_ptr<const nav_msgs::msg::Path> &globalpath);
     void planNextWaypoint(const Eigen::Vector3d next_wp);
     void getLocalTarget();
 
