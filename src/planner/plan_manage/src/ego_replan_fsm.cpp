@@ -843,7 +843,7 @@ namespace ego_planner
     else
       continously_called_times_ = 1;
 
-    static string state_str[8] = {"INIT", "WAIT_TARGET", "GEN_NEW_PATH", "REPLAN_PATH", "EXEC_PATH", "EMERGENCY_STOP", "SEQUENTIAL_START"};
+    static string state_str[7] = {"INIT", "WAIT_TARGET", "GEN_NEW_PATH", "REPLAN_PATH", "EXEC_PATH", "EMERGENCY_STOP"};
     int pre_s = int(exec_state_);
     exec_state_ = new_state;
     cout << "[" + pos_call + "]: from " + state_str[pre_s] + " to " + state_str[int(new_state)] << endl;
@@ -856,7 +856,7 @@ namespace ego_planner
 
   void EGOPlannerStateMachine::printFSMExecState()
   {
-    static string state_str[8] = {"INIT", "WAIT_TARGET", "GEN_NEW_PATH", "REPLAN_PATH", "EXEC_PATH", "EMERGENCY_STOP", "SEQUENTIAL_START"};
+    static string state_str[7] = {"INIT", "WAIT_TARGET", "GEN_NEW_PATH", "REPLAN_PATH", "EXEC_PATH", "EMERGENCY_STOP"};
 
     cout << "[FSM]: state: " + state_str[int(exec_state_)] << endl;
   }
@@ -893,44 +893,15 @@ namespace ego_planner
       break;
     }
 
-    // ----- 等目标：还没收到目标或触发信号就 return；都有了就进“顺序启动”去算第一条路径 -----
+    // ----- 等目标：还没收到目标或触发信号就 return；都有了就进“生成新路径”去算第一条轨迹 -----
     case WAIT_TARGET:
     {
       if (!have_target_ || !have_trigger_)
         goto force_return;
       else
       {
-        changeFSMExecState(SEQUENTIAL_START, "FSM");
+        changeFSMExecState(GEN_NEW_PATH, "FSM");
       }
-      break;
-    }
-
-    // ----- 顺序启动（多机用）：单机或已收到前机路径时，有 odom+目标+触发就去算全局+局部路径，成功就进“执行” -----
-    case SEQUENTIAL_START: // for swarm
-    {
-      if (planner_manager_->pp_.drone_id <= 0 || (planner_manager_->pp_.drone_id >= 1 && have_recv_pre_agent_))
-      {
-        if (have_odom_ && have_target_ && have_trigger_)
-        {
-          bool success = planFromGlobalPath(10); // zx-todo
-          if (success)
-          {
-            changeFSMExecState(EXEC_PATH, "FSM");
-
-            publishSwarmPaths(true);
-          }
-          else
-          {
-            RCLCPP_ERROR(node_->get_logger(), "Failed to generate the first trajectory!!!");
-            changeFSMExecState(SEQUENTIAL_START, "FSM");
-          }
-        }
-        else
-        {
-          RCLCPP_ERROR(node_->get_logger(), "No odom or no target! have_odom_=%d, have_target_=%d", have_odom_, have_target_);
-        }
-      }
-
       break;
     }
 

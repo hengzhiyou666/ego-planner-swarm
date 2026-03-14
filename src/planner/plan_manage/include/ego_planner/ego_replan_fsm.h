@@ -39,8 +39,7 @@ namespace ego_planner
       GEN_NEW_PATH,     // 生成新路径（首次全局规划）
       REPLAN_PATH,      // 重规划路径（飞行中局部/全局重规划）
       EXEC_PATH,        // 执行路径（按当前路径飞行）
-      EMERGENCY_STOP,   // 紧急停止
-      SEQUENTIAL_START  // 顺序启动（多机/编队等场景）
+      EMERGENCY_STOP    // 紧急停止
     };
     enum TARGET_TYPE
     {
