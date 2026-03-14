@@ -531,7 +531,7 @@ namespace ego_planner
     std::vector<Eigen::Vector3d> first_7m_pts;
     first_7m_pts.reserve(unfinished_pts.size());
     double cum = 0.0;
-    for (size_t i = 0; i < unfinished_pts.size(); ++i)
+    for (size_t i = 1; i < unfinished_pts.size(); ++i)
     {
       first_7m_pts.push_back(unfinished_pts[i]);
       if (i > 0)
@@ -541,11 +541,11 @@ namespace ego_planner
           break;
       }
     }
-    // 去掉最前面的两个点后送给 EGO Planner
+    // 去掉最前面的 5 个点后送给 EGO Planner
     pct_guide_segment_.clear();
-    if (first_7m_pts.size() > 2)
+    if (first_7m_pts.size() > 5)
     {
-      pct_guide_segment_.insert(pct_guide_segment_.end(), first_7m_pts.begin() + 2, first_7m_pts.end());
+      pct_guide_segment_.insert(pct_guide_segment_.end(), first_7m_pts.begin() + 5, first_7m_pts.end());
     }
 
     // 7）waypoints_ 仍用于全局多路点规划：取前 7m 填 waypoints_，供 readGivenWps 使用
