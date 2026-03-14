@@ -10,6 +10,7 @@ namespace ego_planner
 
   EGOPlannerManager::~EGOPlannerManager() {}
 
+  // 初始化规划模块：从 node 读取 manager 参数，创建并初始化栅格地图、B 样条优化器、A*、以及可视化句柄
   void EGOPlannerManager::initPlanModules(rclcpp::Node::SharedPtr &node, PlanningVisualization::Ptr vis)
   {
     node->declare_parameter("manager/max_vel", -1.0);
@@ -45,7 +46,9 @@ namespace ego_planner
     visualization_ = vis;
   }
 
-  bool EGOPlannerManager::reboundReplan(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel,
+  // 规划局部路径：根据当前状态与局部目标，生成一条满足动力学约束的 B 样条轨迹（小白：算一段从当前点到前方目标点的可行路径）
+  // flag_polyInit：是否用多项式重新生成初始路径；flag_randomPolyTraj：是否在初始路径中插入随机点
+  bool EGOPlannerManager::planLocalPath(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel,
                                         Eigen::Vector3d start_acc, Eigen::Vector3d local_target_pt,
                                         Eigen::Vector3d local_target_vel, bool flag_polyInit, bool flag_randomPolyTraj)
   {
@@ -99,7 +102,7 @@ namespace ego_planner
           // 后续 B 样条拟合会失败并可能导致数值问题。此时直接退回到多项式初始化方案。
           if (point_set.size() <= 3)
           {
-            std::cout << "[reboundReplan]: guide segment too short ("
+            std::cout << "[planLocalPath]: guide segment too short ("
                       << point_set.size()
                       << " pts), fallback to polynomial init." << std::endl;
             use_guide = false;

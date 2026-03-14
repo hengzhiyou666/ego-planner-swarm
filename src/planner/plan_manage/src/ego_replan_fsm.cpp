@@ -1091,7 +1091,7 @@ namespace ego_planner
 
     for (int i = 0; i < trial_times; i++)
     {
-      if (callReboundReplan(true, flag_random_poly_init))
+      if (callPlanLocalPath(true, flag_random_poly_init))
       {
         return true;
       }
@@ -1118,16 +1118,16 @@ namespace ego_planner
       start_acc_(2) = 0.0;
     }
 
-    bool success = callReboundReplan(false, false);
+    bool success = callPlanLocalPath(false, false);
 
     if (!success)
     {
-      success = callReboundReplan(true, false);
+      success = callPlanLocalPath(true, false);
       if (!success)
       {
         for (int i = 0; i < trial_times; i++)
         {
-          success = callReboundReplan(true, true);
+          success = callPlanLocalPath(true, true);
           if (success)
             break;
         }
@@ -1225,13 +1225,13 @@ namespace ego_planner
     }
   }
 
-  bool EGOReplanFSM::callReboundReplan(bool flag_use_poly_init, bool flag_randomPolyTraj)
+  bool EGOReplanFSM::callPlanLocalPath(bool flag_use_poly_init, bool flag_randomPolyTraj)
   {
 
     getLocalTarget();
 
     bool plan_and_refine_success =
-        planner_manager_->reboundReplan(start_pt_, start_vel_, start_acc_, local_target_pt_, local_target_vel_, (have_new_target_ || flag_use_poly_init), flag_randomPolyTraj);
+        planner_manager_->planLocalPath(start_pt_, start_vel_, start_acc_, local_target_pt_, local_target_vel_, (have_new_target_ || flag_use_poly_init), flag_randomPolyTraj);
     have_new_target_ = false;
 
     cout << "refine_success=" << plan_and_refine_success;

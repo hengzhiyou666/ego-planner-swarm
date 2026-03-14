@@ -105,7 +105,7 @@ namespace ego_planner
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pct_path_unfinished_pub_;    // 发布“从当前位置开始还没走完的参考路径”/pct_path_unfinished
 
     /* helper functions */
-    bool callReboundReplan(bool flag_use_poly_init, bool flag_randomPolyTraj); // front-end and back-end method
+    bool callPlanLocalPath(bool flag_use_poly_init, bool flag_randomPolyTraj); // 调用规划局部路径
     bool callEmergencyStop(Eigen::Vector3d stop_pos);                          // front-end and back-end method
     bool planFromGlobalPath(const int trial_times = 1);
     bool planFromCurrentPath(const int trial_times = 1);
