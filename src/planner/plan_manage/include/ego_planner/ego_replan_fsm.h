@@ -79,6 +79,8 @@ namespace ego_planner
     Eigen::Vector3d end_pt_, end_vel_;                                       // goal state
     Eigen::Vector3d local_target_pt_, local_target_vel_;                     // local target state
     std::vector<Eigen::Vector3d> wps_;
+    /** 从 /pct_path_unfinished 取前 7m 的点（按顺序），去掉最前两个点后送给 EGO Planner 的引导段 */
+    std::vector<Eigen::Vector3d> pct_guide_segment_;
     int current_wp_;
 
     bool flag_escape_emergency_;

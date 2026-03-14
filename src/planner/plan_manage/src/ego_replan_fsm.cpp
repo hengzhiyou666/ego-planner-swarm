@@ -526,21 +526,39 @@ namespace ego_planner
     }
     pct_path_unfinished_pub_->publish(unfinished_msg);
 
-    // 6）在 pct_path_unfinished 中，从 a 开始累计大约 7m 的一小段，作为局部规划的引导路径
-    waypoint_num_ = 0;
-    const size_t max_wp = 200;       // 和内部数组上限保持一致
-    const double guide_len = 7.0;   // 从当前位置往前看的路径长度（单位 m）
-
+    // 6）从 pct_path_unfinished（即 unfinished_pts）中按顺序全取前 7m 的点，去掉最前两个点，作为局部规划引导段送给 EGO Planner
+    const double guide_len = 7.0;  // 单位 m
+    std::vector<Eigen::Vector3d> first_7m_pts;
+    first_7m_pts.reserve(unfinished_pts.size());
     double cum = 0.0;
+    for (size_t i = 0; i < unfinished_pts.size(); ++i)
+    {
+      first_7m_pts.push_back(unfinished_pts[i]);
+      if (i > 0)
+      {
+        cum += (unfinished_pts[i] - unfinished_pts[i - 1]).norm();
+        if (cum >= guide_len - 1e-6)
+          break;
+      }
+    }
+    // 去掉最前面的两个点后送给 EGO Planner
+    pct_guide_segment_.clear();
+    if (first_7m_pts.size() > 2)
+    {
+      pct_guide_segment_.insert(pct_guide_segment_.end(), first_7m_pts.begin() + 2, first_7m_pts.end());
+    }
+
+    // 7）waypoints_ 仍用于全局多路点规划：取前 7m 填 waypoints_，供 readGivenWps 使用
+    waypoint_num_ = 0;
+    const size_t max_wp = 200;
+    cum = 0.0;
     for (size_t i = 0; i < unfinished_pts.size() && waypoint_num_ < static_cast<int>(max_wp); ++i)
     {
       const Eigen::Vector3d &p = unfinished_pts[i];
-
       waypoints_[waypoint_num_][0] = p.x();
       waypoints_[waypoint_num_][1] = p.y();
       waypoints_[waypoint_num_][2] = plan_xy_only_ ? 0.0 : p.z();
       waypoint_num_++;
-
       if (i > 0)
       {
         cum += (unfinished_pts[i] - unfinished_pts[i - 1]).norm();
@@ -548,8 +566,6 @@ namespace ego_planner
           break;
       }
     }
-
-    // 7）如果依然没得到任何有效路点，就放弃这条路径
     if (waypoint_num_ <= 0)
     {
       RCLCPP_WARN(node_->get_logger(), "No valid waypoints generated from /pct_path_unfinished.");
@@ -1360,6 +1376,20 @@ namespace ego_planner
 
   void EGOReplanFSM::getLocalTarget()
   {
+    // REFENCE_PATH 模式：引导段取自 /pct_path_unfinished 前 7m 且去掉最前两点的 pct_guide_segment_
+    if (target_type_ == TARGET_TYPE::REFENCE_PATH && !pct_guide_segment_.empty())
+    {
+      planner_manager_->setLocalGuideSegment(pct_guide_segment_);
+      local_target_pt_ = pct_guide_segment_.back();
+      local_target_vel_ = Eigen::Vector3d::Zero();
+      if (plan_xy_only_)
+      {
+        local_target_pt_(2) = 0.0;
+        local_target_vel_(2) = 0.0;
+      }
+      return;
+    }
+
     const double t_step = 0.05;
     GlobalPathData &global_data = planner_manager_->global_data_;
     const double global_duration = global_data.global_duration_;
