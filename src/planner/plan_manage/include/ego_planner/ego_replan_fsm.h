@@ -26,7 +26,7 @@ using std::vector;
 namespace ego_planner
 {
 
-  class EGOReplanFSM
+  class EGOPlannerStateMachine
   {
 
   private:
@@ -112,7 +112,7 @@ namespace ego_planner
 
     /* return value: std::pair< Times of the same state be continuously called, current continuously called state > */
     void changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call);
-    std::pair<int, EGOReplanFSM::FSM_EXEC_STATE> timesOfConsecutiveStateCalls();
+    std::pair<int, EGOPlannerStateMachine::FSM_EXEC_STATE> timesOfConsecutiveStateCalls();
     void printFSMExecState();
 
     void readGivenWps();
@@ -133,10 +133,10 @@ namespace ego_planner
     void publishSwarmPaths(bool startup_pub);
 
   public:
-    EGOReplanFSM(/* args */)
+    EGOPlannerStateMachine(/* args */)
     {
     }
-    ~EGOReplanFSM()
+    ~EGOPlannerStateMachine()
     {
     }
 
