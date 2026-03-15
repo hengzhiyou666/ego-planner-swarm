@@ -38,17 +38,18 @@ namespace ego_planner
     have_trigger_ = !flag_realworld_experiment_;
 
     node_->declare_parameter("fsm/waypoint_num", -1);
-    node_->get_parameter("fsm/waypoint_num", waypoint_num_);
+    node_->get_parameter("fsm/waypoint_num", waypoint_index_now_);
 
-    for (int i = 0; i < waypoint_num_; i++)
+    for (int i = 0; i < waypoint_index_now_; i++)
     {
       node_->declare_parameter("fsm/waypoint" + to_string(i) + "_x", -1.0);
       node_->declare_parameter("fsm/waypoint" + to_string(i) + "_y", -1.0);
       node_->declare_parameter("fsm/waypoint" + to_string(i) + "_z", -1.0);
 
-      node_->get_parameter("fsm/waypoint" + to_string(i) + "_x", waypoints_[i][0]);
-      node_->get_parameter("fsm/waypoint" + to_string(i) + "_y", waypoints_[i][1]);
-      node_->get_parameter("fsm/waypoint" + to_string(i) + "_z", waypoints_[i][2]);
+      // 从参数服务器读取第 i 个预设路点的 x/y/z，写入 waypoints_array_
+      node_->get_parameter("fsm/waypoint" + to_string(i) + "_x", waypoints_array_[i][0]);
+      node_->get_parameter("fsm/waypoint" + to_string(i) + "_y", waypoints_array_[i][1]);
+      node_->get_parameter("fsm/waypoint" + to_string(i) + "_z", waypoints_array_[i][2]);
     }
 
     /* initialize main modules */
@@ -176,34 +177,35 @@ namespace ego_planner
   }
 
   /**
-   * 根据当前 waypoints_ / waypoint_num_ 生成内部路点序列 wps_，并触发全局规划。
-   * - 将 waypoints_ 拷贝到 wps_，wp_id_ 置 0。
-   * - USE_GLOBAL_PATH 且多路点：在路径上找离 odom 最近点，向前约 2m 得首目标，用该子路径做 wps_，
+   * 根据当前 waypoints_array_ / waypoint_index_now_ 生成内部路点序列 waypoints_array_xyz_，并触发全局规划。
+   * - 将 waypoints_array_ 拷贝到 waypoints_array_xyz_，wp_id_ 置 0。
+   * - USE_GLOBAL_PATH 且多路点：在路径上找离 odom 最近点，向前约 2m 得首目标，用该子路径做 waypoints_array_xyz_，
    *   然后 planGlobalPathWaypoints；成功则置 have_target_、have_new_target_ 并切到 GEN_NEW_PATH/REPLAN_PATH，
    *   失败则退化为只规划到第一个路点。
-   * - 其他情况（单路点、PRESET_TARGET、或上述失败）：仅对路点做可视化，并调用 planNextWaypoint(wps_[0]) 规划到第一个路点。
+   * - 其他情况（单路点、PRESET_TARGET、或上述失败）：仅对路点做可视化，并调用 planNextWaypoint(waypoints_array_xyz_[0]) 规划到第一个路点。
    */
   void EGOPlannerStateMachine::readGivenWps()
   {
-    if (waypoint_num_ <= 0)
+    if (waypoint_index_now_ <= 0)
     {
-      RCLCPP_ERROR(node_->get_logger(), "Wrong waypoint_num_ = %d", waypoint_num_);
+      RCLCPP_ERROR(node_->get_logger(), "Wrong waypoint_index_now_ = %d", waypoint_index_now_);
       return;
     }
 
-    wps_.resize(waypoint_num_);
-    for (int i = 0; i < waypoint_num_; i++)
+    waypoints_array_xyz_.resize(waypoint_index_now_);
+    for (int i = 0; i < waypoint_index_now_; i++)
     {
-      wps_[i](0) = waypoints_[i][0];
-      wps_[i](1) = waypoints_[i][1];
-      wps_[i](2) = plan_xy_only_ ? 0.0 : waypoints_[i][2];
+      waypoints_array_xyz_[i](0) = waypoints_array_[i][0];
+      waypoints_array_xyz_[i](1) = waypoints_array_[i][1];
+      waypoints_array_xyz_[i](2) = plan_xy_only_ ? 0.0 : waypoints_array_[i][2];
     }
 
     wp_id_ = 0;
 
-    // USE_GLOBAL_PATH 且多路点：在路径上找离当前位置最近点，沿路径向前约 2m 作为首目标 first_pt，再以 first_pt 到终点的子路径作为新 wps_
-    if (target_type_ == TARGET_TYPE::USE_GLOBAL_PATH && waypoint_num_ > 1)
+    // ========== 分支：USE_GLOBAL_PATH 且多路点（>1）时，从路径上找“最近点 + 向前 2m”作为首目标，再整段多路点全局规划 ==========
+    if (target_type_ == TARGET_TYPE::USE_GLOBAL_PATH && waypoint_index_now_ > 1)
     {
+      // ---------- 工具：求点 p 到线段 ab 的最近点及参数 t ----------
       auto closestOnSegment = [](const Eigen::Vector3d &p, const Eigen::Vector3d &a, const Eigen::Vector3d &b,
                                  Eigen::Vector3d &out_closest, double &out_t) -> double {
         Eigen::Vector3d ap = p - a, ab = b - a;
@@ -221,16 +223,16 @@ namespace ego_planner
         return (p - out_closest).squaredNorm();
       };
 
-      // 1) 找路径上离当前位置最近的点 join_pt（位于 wps_[seg_idx] -> wps_[seg_idx+1] 的线段上）
-      Eigen::Vector3d join_pt = wps_[0];
+      // ---------- 模块 1：找路径上离当前位置最近的点 join_pt（所在线段索引 seg_idx） ----------
+      Eigen::Vector3d join_pt = waypoints_array_xyz_[0];
       double join_t = 0.0;
       double best_d2 = 1e30;
       int seg_idx = 0;
       Eigen::Vector3d cand;
       double cand_t = 0.0;
-      for (int i = 0; i < waypoint_num_ - 1; i++)
+      for (int i = 0; i < waypoint_index_now_ - 1; i++)
       {
-        double d2 = closestOnSegment(robot_location_now_, wps_[i], wps_[i + 1], cand, cand_t);
+        double d2 = closestOnSegment(robot_location_now_, waypoints_array_xyz_[i], waypoints_array_xyz_[i + 1], cand, cand_t);
         if (d2 < best_d2)
         {
           best_d2 = d2;
@@ -242,14 +244,14 @@ namespace ego_planner
       if (plan_xy_only_)
         join_pt(2) = 0.0;
 
-      // 2) 顺着路径方向，从 join_pt 往前走约 2m，得到第一个目标点 first_pt
+      // ---------- 模块 2：从 join_pt 沿路径方向向前约 2m，得到首目标 first_pt ----------
       const double forward_dist = 2.0;
       double remain = forward_dist;
       Eigen::Vector3d first_pt = join_pt;
 
       // 从当前线段的 join_t 位置开始往前推
-      Eigen::Vector3d a = wps_[seg_idx];
-      Eigen::Vector3d b = wps_[seg_idx + 1];
+      Eigen::Vector3d a = waypoints_array_xyz_[seg_idx];
+      Eigen::Vector3d b = waypoints_array_xyz_[seg_idx + 1];
       if (plan_xy_only_)
       {
         a(2) = 0.0;
@@ -275,10 +277,10 @@ namespace ego_planner
         remain -= dist_to_b;
         first_pt = b;
         int j = seg_idx + 1;
-        while (remain > 1e-6 && j < waypoint_num_ - 1)
+        while (remain > 1e-6 && j < waypoint_index_now_ - 1)
         {
-          Eigen::Vector3d p0 = wps_[j];
-          Eigen::Vector3d p1 = wps_[j + 1];
+          Eigen::Vector3d p0 = waypoints_array_xyz_[j];
+          Eigen::Vector3d p1 = waypoints_array_xyz_[j + 1];
           if (plan_xy_only_)
           {
             p0(2) = 0.0;
@@ -305,29 +307,30 @@ namespace ego_planner
       if (plan_xy_only_)
         first_pt(2) = 0.0;
 
-      // 3) 用 first_pt 作为新的第一个 waypoint，并从其所在段之后继续到终点
+      // ---------- 模块 3：用 first_pt 作为首点，拼接其后路径到终点，更新 waypoints_array_xyz_ 与 waypoint_index_now_ ----------
       std::vector<Eigen::Vector3d> new_wps;
-      new_wps.reserve(waypoint_num_ + 1);
+      new_wps.reserve(waypoint_index_now_ + 1);
       new_wps.push_back(first_pt);
-      for (int i = seg_idx + 1; i < waypoint_num_; i++)
+      for (int i = seg_idx + 1; i < waypoint_index_now_; i++)
       {
-        if ((wps_[i] - first_pt).norm() > 1e-3)
-          new_wps.push_back(wps_[i]);
+        if ((waypoints_array_xyz_[i] - first_pt).norm() > 1e-3)
+          new_wps.push_back(waypoints_array_xyz_[i]);
       }
-      wps_ = new_wps;
-      waypoint_num_ = (int)wps_.size();
+      waypoints_array_xyz_ = new_wps;
+      waypoint_index_now_ = (int)waypoints_array_xyz_.size();
       wp_id_ = 0;
 
-      // 用 visualization_->displayGoalPoint() 方法对waypoint进行可视化（使用更新后的 wps_）
-      for (size_t i = 0; i < (size_t)waypoint_num_; i++)
+      // ---------- 模块 4：对更新后的 waypoints_array_xyz_ 做路点可视化 ----------
+      for (size_t i = 0; i < (size_t)waypoint_index_now_; i++)
       {
-        visualization_->displayGoalPoint(wps_[i], Eigen::Vector4d(0, 0.5, 0.5, 1), 0.3, i);
+        visualization_->displayGoalPoint(waypoints_array_xyz_[i], Eigen::Vector4d(0, 0.5, 0.5, 1), 0.3, i);
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
       }
 
+      // ---------- 模块 5：构造 waypoints_vec 并调用多路点全局规划（含沿路径方向的速度约束） ----------
       std::vector<Eigen::Vector3d> waypoints_vec;
-      for (int i = 0; i < waypoint_num_; i++)
-        waypoints_vec.push_back(wps_[i]);
+      for (int i = 0; i < waypoint_index_now_; i++)
+        waypoints_vec.push_back(waypoints_array_xyz_[i]);
 
       bool success = planner_manager_->planGlobalPathWaypoints(
           robot_location_now_,
@@ -350,9 +353,10 @@ namespace ego_planner
           Eigen::Vector3d::Zero(),
           waypoints_vec, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero());
 
+      // ---------- 模块 6：规划成功则置 end_pt_/have_target_、可视化全局路径并切换状态后 return ----------
       if (success)
       {
-        end_pt_ = wps_[wp_id_];
+        end_pt_ = waypoints_array_xyz_[wp_id_];
         end_vel_.setZero();
         have_target_ = true;
         have_new_target_ = true;
@@ -374,18 +378,18 @@ namespace ego_planner
           changeFSMExecState(REPLAN_PATH, "TRIG");
         return;
       }
-      // 全路径规划失败时退化为只规划到第一个路点
+      // 全路径规划失败时退化为只规划到第一个路点（落到下方“单路点/非 USE_GLOBAL_PATH”逻辑）
     }
 
-    // 非 USE_GLOBAL_PATH：用 visualization_->displayGoalPoint() 方法对waypoint进行可视化
-    for (size_t i = 0; i < (size_t)waypoint_num_; i++)
+    // ---------- 模块 7：非 USE_GLOBAL_PATH 或单路点——仅做路点可视化 ----------
+    for (size_t i = 0; i < (size_t)waypoint_index_now_; i++)
     {
-      visualization_->displayGoalPoint(wps_[i], Eigen::Vector4d(0, 0.5, 0.5, 1), 0.3, i);
+      visualization_->displayGoalPoint(waypoints_array_xyz_[i], Eigen::Vector4d(0, 0.5, 0.5, 1), 0.3, i);
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
-    // 单路点或非 USE_GLOBAL_PATH 或上面全路径规划失败：只规划到第一个路点
-    planNextWaypoint(wps_[wp_id_]);
+    // ---------- 模块 8：规划到当前第一个路点 waypoints_array_xyz_[wp_id_] ----------
+    planNextWaypoint(waypoints_array_xyz_[wp_id_]);
   }
 
   // /pct_path 话题回调：
@@ -490,94 +494,96 @@ namespace ego_planner
     }
 
     // 5）构造“从当前位置走到 c，再接上 c 之后尚未走完的整条路径”的未完成路径 pct_path_unfinished
-    std::vector<Eigen::Vector3d> unfinished_pts;
-    unfinished_pts.reserve(globalpath_points.size());
+    std::vector<Eigen::Vector3d> unfinished_points;
+    unfinished_points.reserve(static_cast<int>(ab/0.1)+globalpath_points.size()+1);
 
     // 5.1）先在当前位置到 c 之间，每隔约 0.1m 取一个点；如果 ac 很短，则只取两端
-    Eigen::Vector3d ac_vec = cPointXyz - robot_location;
-    double ac_len = ac_vec.norm();
-    const double ds = 0.1; // 10cm 步长
+    Eigen::Vector3d ac_vector = cPointXyz - robot_location;
+    double ac_len = ac_vector.norm();
+    const double oneStepLength = 0.1; // 10cm 步长
 
-    unfinished_pts.push_back(robot_location);
-    if (ac_len > 1e-3)
+    unfinished_points.push_back(robot_location);
+    if (ac_len > 0.2)
     {
-      int steps = static_cast<int>(std::floor(ac_len / ds));
-      Eigen::Vector3d dir = ac_vec / ac_len;
-      for (int i = 1; i < steps; ++i)
+      int stepsNumber = static_cast<int>(std::floor(ac_len / oneStepLength));
+      Eigen::Vector3d ac_unitVector = ac_vector / ac_len;
+      for (int i = 1; i < stepsNumber; i++)
       {
-        double dist = i * ds;
-        unfinished_pts.push_back(robot_location + dist * dir);
+        double tempDistance = i * oneStepLength;
+        unfinished_points.push_back(robot_location + tempDistance * ac_unitVector);
       }
-      // 把 c 作为这一段的终点
-      unfinished_pts.push_back(cPointXyz);
     }
+    // 把 c 作为这一段的终点
+    unfinished_points.push_back(cPointXyz);
 
     // 5.2）再把 c 之后的路径原样拼接上去（跳过 c 所在线段的起点，避免重复）
     for (int i = c_index + 1; i < static_cast<int>(globalpath_points.size()); ++i)
     {
-      unfinished_pts.push_back(globalpath_points[i]);
+      unfinished_points.push_back(globalpath_points[i]);
     }
 
     // 5.3）发布 /pct_path_unfinished，方便 RViz 中查看“从当前位置开始还没走完的全局参考路径”
-    nav_msgs::msg::Path unfinished_msg;
-    unfinished_msg.header = globalpath->header;
-    unfinished_msg.poses.resize(unfinished_pts.size());
-    for (size_t i = 0; i < unfinished_pts.size(); ++i)
+    nav_msgs::msg::Path unfinished_path;
+    unfinished_path.header = globalpath->header;
+    unfinished_path.poses.resize(unfinished_points.size());
+    for (size_t i = 0; i < unfinished_points.size(); ++i)
     {
-      auto &ps = unfinished_msg.poses[i];
+      auto &ps = unfinished_path.poses[i];
       ps.header = globalpath->header;
-      ps.pose.position.x = unfinished_pts[i].x();
-      ps.pose.position.y = unfinished_pts[i].y();
-      ps.pose.position.z = unfinished_pts[i].z();
+      ps.pose.position.x = unfinished_points[i].x();
+      ps.pose.position.y = unfinished_points[i].y();
+      ps.pose.position.z = unfinished_points[i].z();
       // 姿态这里不做精细处理，简单置为单位四元数即可
       ps.pose.orientation.x = 0.0;
       ps.pose.orientation.y = 0.0;
       ps.pose.orientation.z = 0.0;
       ps.pose.orientation.w = 1.0;
     }
-    pct_path_unfinished_pub_->publish(unfinished_msg);
+    pct_path_unfinished_pub_->publish(unfinished_path);
 
-    // 6）从 pct_path_unfinished（即 unfinished_pts）中按顺序全取前 7m 的点，去掉最前两个点，作为局部规划引导段送给 EGO Planner
+    // 6）从 pct_path_unfinished（即 unfinished_points）中按顺序全取前 7m 的点，去掉最前5个点，作为局部规划引导段送给 EGO Planner
     const double guide_len = 7.0;  // 单位 m
     std::vector<Eigen::Vector3d> first_7m_pts;
-    first_7m_pts.reserve(unfinished_pts.size());
-    double cum = 0.0;
-    for (size_t i = 1; i < unfinished_pts.size(); ++i)
+    first_7m_pts.reserve(unfinished_points.size());
+    double templength = 0.0;
+    for (size_t i = 1; i < unfinished_points.size(); ++i)
     {
-      first_7m_pts.push_back(unfinished_pts[i]);
+      first_7m_pts.push_back(unfinished_points[i]);
       if (i > 0)
       {
-        cum += (unfinished_pts[i] - unfinished_pts[i - 1]).norm();
-        if (cum >= guide_len - 1e-6)
+        templength += (unfinished_points[i] - unfinished_points[i - 1]).norm();
+        if (templength >= guide_len - 1e-3)
           break;
       }
     }
     // 去掉最前面的 5 个点后送给 EGO Planner
-    pct_guide_segment_.clear();
+    guide_path_7m_withoutFirst5points_fsm_h_.clear();
     if (first_7m_pts.size() > 5)
     {
-      pct_guide_segment_.insert(pct_guide_segment_.end(), first_7m_pts.begin() + 5, first_7m_pts.end());
+      guide_path_7m_withoutFirst5points_fsm_h_.insert(guide_path_7m_withoutFirst5points_fsm_h_.end(), first_7m_pts.begin() + 5, first_7m_pts.end());
     }
-
-    // 7）waypoints_ 仍用于全局多路点规划：取前 7m 填 waypoints_，供 readGivenWps 使用
-    waypoint_num_ = 0;
+    
+    
+    //=====================================路点约束=========================================================
+    // 7）waypoints_array_ 仍用于全局多路点规划：取前 7m 填 waypoints_array_，供 readGivenWps 使用
+    waypoint_index_now_ = 0;
     const size_t max_wp = 200;
-    cum = 0.0;
-    for (size_t i = 0; i < unfinished_pts.size() && waypoint_num_ < static_cast<int>(max_wp); ++i)
+    templength = 0.0;
+    for (size_t i = 1; i < unfinished_points.size() && waypoint_index_now_ < static_cast<int>(max_wp); ++i)
     {
-      const Eigen::Vector3d &p = unfinished_pts[i];
-      waypoints_[waypoint_num_][0] = p.x();
-      waypoints_[waypoint_num_][1] = p.y();
-      waypoints_[waypoint_num_][2] = plan_xy_only_ ? 0.0 : p.z();
-      waypoint_num_++;
+      const Eigen::Vector3d &p = unfinished_points[i];
+      waypoints_array_[waypoint_index_now_][0] = p.x();
+      waypoints_array_[waypoint_index_now_][1] = p.y();
+      waypoints_array_[waypoint_index_now_][2] = plan_xy_only_ ? 0.0 : p.z();
+      waypoint_index_now_++;
       if (i > 0)
       {
-        cum += (unfinished_pts[i] - unfinished_pts[i - 1]).norm();
-        if (cum >= guide_len - 1e-3)
+        templength += (unfinished_points[i] - unfinished_points[i - 1]).norm();
+        if (templength >= guide_len - 1e-3)
           break;
       }
     }
-    if (waypoint_num_ <= 0)
+    if (waypoint_index_now_ <= 0)
     {
       RCLCPP_WARN(node_->get_logger(), "No valid waypoints generated from /pct_path_unfinished.");
       return;
@@ -587,7 +593,7 @@ namespace ego_planner
     have_pct_path_ = true;
     have_trigger_ = true; /* USE_GLOBAL_PATH 下用收到路径作为触发 */
 
-    // 8）把采样好的 waypoints_ 转换成内部的 wps_ 向量，并调用原有多路点规划逻辑
+    // 8）把采样好的 waypoints_array_ 转换成内部的 waypoints_array_xyz_ 向量，并调用原有多路点规划逻辑
     readGivenWps();
   }
 
@@ -932,10 +938,10 @@ namespace ego_planner
         if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::USE_GLOBAL_PATH) &&
             (robot_location_now_ - end_pt_).norm() < no_replan_thresh_)
         {
-          if (wp_id_ < waypoint_num_ - 1)
+          if (wp_id_ < waypoint_index_now_ - 1)
           {
             wp_id_++;                      // 还有下一路点：切到下一路点再规划
-            planNextWaypoint(wps_[wp_id_]);
+            planNextWaypoint(waypoints_array_xyz_[wp_id_]);
           }
           else
           {
@@ -965,10 +971,10 @@ namespace ego_planner
         if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::USE_GLOBAL_PATH) &&
             (robot_location_now_ - end_pt_).norm() < no_replan_thresh_)
         {
-          if (wp_id_ < waypoint_num_ - 1)
+          if (wp_id_ < waypoint_index_now_ - 1)
           {
             wp_id_++;
-            planNextWaypoint(wps_[wp_id_]);
+            planNextWaypoint(waypoints_array_xyz_[wp_id_]);
           }
           else
           {
@@ -997,11 +1003,11 @@ namespace ego_planner
 
       /* && (end_pt_ - pos).norm() < 0.5 */
       if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::USE_GLOBAL_PATH) &&
-          (wp_id_ < waypoint_num_ - 1) &&
+          (wp_id_ < waypoint_index_now_ - 1) &&
           (end_pt_ - pos).norm() < no_replan_thresh_)
       {
         wp_id_++;
-        planNextWaypoint(wps_[wp_id_]);
+        planNextWaypoint(waypoints_array_xyz_[wp_id_]);
       }
       else if ((local_target_pt_ - end_pt_).norm() < 1e-3) // close to the global target
       {
@@ -1013,7 +1019,7 @@ namespace ego_planner
           if (target_type_ == TARGET_TYPE::PRESET_TARGET)
           {
             wp_id_ = 0;
-            planNextWaypoint(wps_[wp_id_]);
+            planNextWaypoint(waypoints_array_xyz_[wp_id_]);
           }
           /* USE_GLOBAL_PATH: 跑完当前路径后进入 WAIT_TARGET，等待新 /pct_path，不自动循环 */
 
@@ -1369,11 +1375,11 @@ namespace ego_planner
 
   void EGOPlannerStateMachine::getLocalTarget()
   {
-    // USE_GLOBAL_PATH 模式：引导段取自 /pct_path_unfinished 前 7m 且去掉最前两点的 pct_guide_segment_
-    if (target_type_ == TARGET_TYPE::USE_GLOBAL_PATH && !pct_guide_segment_.empty())
+    // USE_GLOBAL_PATH 模式：引导段取自 /pct_path_unfinished 前 7m 且去掉最前5个点的 guide_path_7m_withoutFirst5points_fsm_h_
+    if (target_type_ == TARGET_TYPE::USE_GLOBAL_PATH && !guide_path_7m_withoutFirst5points_fsm_h_.empty())
     {
-      planner_manager_->setLocalGuideSegment(pct_guide_segment_);
-      local_target_pt_ = pct_guide_segment_.back();
+      planner_manager_->copy7mPath(guide_path_7m_withoutFirst5points_fsm_h_);// 函数体：{ guide_path_7m_withoutFirst5points_manager_h_ = seg; }
+      local_target_pt_ = guide_path_7m_withoutFirst5points_fsm_h_.back();
       local_target_vel_ = Eigen::Vector3d::Zero();
       if (plan_xy_only_)
       {
@@ -1383,6 +1389,7 @@ namespace ego_planner
       return;
     }
 
+    //如果快到终点了，guide_path_7m_withoutFirst5points_fsm_h_为空
     const double t_step = 0.05;
     GlobalPathData &global_data = planner_manager_->global_data_;
     const double global_duration = global_data.global_duration_;
@@ -1432,7 +1439,7 @@ namespace ego_planner
       local_target_vel_ = Eigen::Vector3d::Zero();
       if (plan_xy_only_)
       { local_target_pt_(2) = 0.0; local_target_vel_(2) = 0.0; }
-      planner_manager_->setLocalGuideSegment(std::vector<Eigen::Vector3d>());
+      planner_manager_->copy7mPath(std::vector<Eigen::Vector3d>());
       return;
     }
     local_target_pt_ = segment_pts.back();
@@ -1446,7 +1453,7 @@ namespace ego_planner
     }
     if (plan_xy_only_)
       local_target_pt_(2) = 0.0;
-    planner_manager_->setLocalGuideSegment(segment_pts);
+    planner_manager_->copy7mPath(segment_pts);
   }
 
 } // namespace ego_planner

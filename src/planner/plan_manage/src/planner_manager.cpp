@@ -87,11 +87,11 @@ namespace ego_planner
         flag_force_polynomial = false;
 
         // ---------- 1）优先尝试使用从全局路径截取的引导段 ----------
-        bool use_guide = !local_guide_segment_.empty() && local_guide_segment_.size() >= 2;
+        bool use_guide = !guide_path_7m_withoutFirst5points_manager_h_.empty() && guide_path_7m_withoutFirst5points_manager_h_.size() >= 2;
         if (use_guide)
         {
           point_set.push_back(start_pt);
-          for (const Eigen::Vector3d &pt : local_guide_segment_)
+          for (const Eigen::Vector3d &pt : guide_path_7m_withoutFirst5points_manager_h_)
             point_set.push_back(pt);
           if ((point_set.back() - local_target_pt).norm() > 1e-3)
             point_set.back() = local_target_pt;

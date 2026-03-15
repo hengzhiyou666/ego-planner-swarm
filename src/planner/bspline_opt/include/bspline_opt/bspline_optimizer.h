@@ -146,7 +146,7 @@ namespace ego_planner
     // int             dim_;                // dimension of the B-spline
     //
     vector<Eigen::Vector3d> guide_pts_; // geometric guiding path points, N-6
-    vector<Eigen::Vector3d> waypoints_; // waypts constraints
+    vector<Eigen::Vector3d> waypoints_;  // 路点约束（途经点序列）
     vector<int> waypt_idx_;             // waypts constraints index
                                         //
     int max_num_id_, max_time_id_;      // stopping criteria

@@ -61,9 +61,9 @@ namespace ego_planner
     GlobalPathData global_data_;
     GridMap::Ptr grid_map_;
     /* 局部规划使用的引导路径：从全局路径上最近点起向前约 7m 的一段 */
-    std::vector<Eigen::Vector3d> local_guide_segment_;
-    void setLocalGuideSegment(const std::vector<Eigen::Vector3d> &seg) { local_guide_segment_ = seg; }
-    const std::vector<Eigen::Vector3d> &getLocalGuideSegment() const { return local_guide_segment_; }
+    std::vector<Eigen::Vector3d> guide_path_7m_withoutFirst5points_manager_h_;
+    void copy7mPath(const std::vector<Eigen::Vector3d> &seg) { guide_path_7m_withoutFirst5points_manager_h_ = seg; }
+    const std::vector<Eigen::Vector3d> &giveMe7mPathPoints() const { return guide_path_7m_withoutFirst5points_manager_h_; }
     fast_planner::ObjPredictor::Ptr obj_predictor_;    
     SwarmPathData swarm_paths_buf_;
 

@@ -57,8 +57,8 @@ namespace ego_planner
     /* parameters */
     int target_type_; // 1 mannual select, 2 hard code
     double no_replan_thresh_, replan_thresh_;
-    double waypoints_[200][3];
-    int waypoint_num_, wp_id_;
+    double waypoints_array_[200][3];
+    int waypoint_index_now_, wp_id_;
     double planning_horizen_, planning_horizen_time_;
     double emergency_time_;
     bool flag_realworld_experiment_;
@@ -77,9 +77,9 @@ namespace ego_planner
     Eigen::Vector3d init_pt_, start_pt_, start_vel_, start_acc_, start_yaw_; // start state
     Eigen::Vector3d end_pt_, end_vel_;                                       // goal state
     Eigen::Vector3d local_target_pt_, local_target_vel_;                     // local target state
-    std::vector<Eigen::Vector3d> wps_;
+    std::vector<Eigen::Vector3d> waypoints_array_xyz_;
     /** 从 /pct_path_unfinished 取前 7m 的点（按顺序），去掉最前 5 个点后送给 EGO Planner 的引导段 */
-    std::vector<Eigen::Vector3d> pct_guide_segment_;
+    std::vector<Eigen::Vector3d> guide_path_7m_withoutFirst5points_fsm_h_;
     int current_wp_;
 
     bool flag_escape_emergency_;
