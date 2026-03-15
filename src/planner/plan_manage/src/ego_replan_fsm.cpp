@@ -101,9 +101,9 @@ namespace ego_planner
         1,
         [this](const std::shared_ptr<const nav_msgs::msg::Odometry> &msg)
         {
-          this->odometryCallback(msg);
+          this->autoFunction_GetOdometry(msg);
         });
-    // std::bind(&classEGOPlannerStateMachine::odometryCallback, this, std::placeholders::_1));
+    // std::bind(&classEGOPlannerStateMachine::autoFunction_GetOdometry, this, std::placeholders::_1));
 
     //============================================发布话题=========================================================
     if (planner_manager_->pp_.drone_id >= 1)
@@ -258,7 +258,7 @@ namespace ego_planner
       double cand_t = 0.0;
       for (int i = 0; i < waypoint_index_now_ - 1; i++)
       {
-        double d2 = closestOnSegment(robot_location_now_, waypoints_array_xyz_[i], waypoints_array_xyz_[i + 1], cand, cand_t);
+        double d2 = closestOnSegment(robot_location_now_fromOdomDirectly_, waypoints_array_xyz_[i], waypoints_array_xyz_[i + 1], cand, cand_t);
         if (d2 < best_d2)
         {
           best_d2 = d2;
@@ -360,13 +360,13 @@ namespace ego_planner
         waypoints_vec.push_back(waypoints_array_xyz_[i]);
 
       bool success = planner_manager_->planGlobalPathWaypoints(
-          robot_location_now_,
+          robot_location_now_fromOdomDirectly_,
           [&]() -> Eigen::Vector3d {
-            // 用“沿路径前进方向”的速度约束生成全局参考轨迹，避免因 odom_vel_ 横向/反向导致 min-snap 轨迹折返
-            Eigen::Vector3d v = odom_vel_;
+            // 用“沿路径前进方向”的速度约束生成全局参考轨迹，避免因 robot_vel_now_fromOdomDirectly_ 横向/反向导致 min-snap 轨迹折返
+            Eigen::Vector3d v = robot_vel_now_fromOdomDirectly_;
             if (plan_xy_only_)
               v(2) = 0.0;
-            Eigen::Vector3d dir = first_pt - robot_location_now_;
+            Eigen::Vector3d dir = first_pt - robot_location_now_fromOdomDirectly_;
             if (plan_xy_only_)
               dir(2) = 0.0;
             if (dir.norm() < 1e-3)
@@ -586,7 +586,7 @@ namespace ego_planner
       RCLCPP_WARN(node_->get_logger(), "全局路径点太少了，globalpath_points has less than 2 points, ignore.");
       return;
     }
-    Eigen::Vector3d robot_location = robot_location_now_;
+    Eigen::Vector3d robot_location = robot_location_now_fromOdomDirectly_;
     if (plan_xy_only_)
       robot_location(2) = 0.0;
 
@@ -668,7 +668,7 @@ namespace ego_planner
     if (plan_xy_only_)
       wp(2) = 0.0;
     bool success = false;
-    success = planner_manager_->planGlobalPath(robot_location_now_, odom_vel_, Eigen::Vector3d::Zero(), wp, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero());
+    success = planner_manager_->planGlobalPath(robot_location_now_fromOdomDirectly_, robot_vel_now_fromOdomDirectly_, Eigen::Vector3d::Zero(), wp, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero());
 
     if (success)
     {
@@ -709,7 +709,7 @@ namespace ego_planner
   {
     have_trigger_ = true;
     cout << "Triggered!" << endl;
-    init_pt_ = robot_location_now_;
+    init_pt_ = robot_location_now_fromOdomDirectly_;
   }
 
   void classEGOPlannerStateMachine::waypointCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg)
@@ -719,22 +719,22 @@ namespace ego_planner
 
     cout << "Triggered!" << endl;
 
-    init_pt_ = robot_location_now_;
+    init_pt_ = robot_location_now_fromOdomDirectly_;
 
     Eigen::Vector3d end_wp(msg->pose.position.x, msg->pose.position.y, 1.0);
 
     planNextWaypoint(end_wp);
   }
 
-  void classEGOPlannerStateMachine::odometryCallback(const std::shared_ptr<const nav_msgs::msg::Odometry> &msg)
+  void classEGOPlannerStateMachine::autoFunction_GetOdometry(const std::shared_ptr<const nav_msgs::msg::Odometry> &msg)
   {
-    robot_location_now_(0) = msg->pose.pose.position.x;
-    robot_location_now_(1) = msg->pose.pose.position.y;
-    robot_location_now_(2) = plan_xy_only_ ? 0.0 : msg->pose.pose.position.z;
+    robot_location_now_fromOdomDirectly_(0) = msg->pose.pose.position.x;
+    robot_location_now_fromOdomDirectly_(1) = msg->pose.pose.position.y;
+    robot_location_now_fromOdomDirectly_(2) = plan_xy_only_ ? 0.0 : msg->pose.pose.position.z;
 
-    odom_vel_(0) = msg->twist.twist.linear.x;
-    odom_vel_(1) = msg->twist.twist.linear.y;
-    odom_vel_(2) = plan_xy_only_ ? 0.0 : msg->twist.twist.linear.z;
+    robot_vel_now_fromOdomDirectly_(0) = msg->twist.twist.linear.x;
+    robot_vel_now_fromOdomDirectly_(1) = msg->twist.twist.linear.y;
+    robot_vel_now_fromOdomDirectly_(2) = plan_xy_only_ ? 0.0 : msg->twist.twist.linear.z;
 
     // odom_acc_ = estimateAcc( msg );
 
@@ -782,7 +782,7 @@ namespace ego_planner
     Eigen::Vector3d cp1(msg->pos_pts[1].x, msg->pos_pts[1].y, msg->pos_pts[1].z);
     Eigen::Vector3d cp2(msg->pos_pts[2].x, msg->pos_pts[2].y, msg->pos_pts[2].z);
     Eigen::Vector3d swarm_start_pt = (cp0 + 4 * cp1 + cp2) / 6;
-    if ((swarm_start_pt - robot_location_now_).norm() > planning_horizen_ * 4.0f / 3.0f)
+    if ((swarm_start_pt - robot_location_now_fromOdomDirectly_).norm() > planning_horizen_ * 4.0f / 3.0f)
     {
       planner_manager_->swarm_paths_buf_[id].drone_id = -1;
       return; // if the current drone is too far to the received agent.
@@ -868,7 +868,7 @@ namespace ego_planner
       Eigen::Vector3d cp1(msg->path[i].pos_pts[1].x, msg->path[i].pos_pts[1].y, msg->path[i].pos_pts[1].z);
       Eigen::Vector3d cp2(msg->path[i].pos_pts[2].x, msg->path[i].pos_pts[2].y, msg->path[i].pos_pts[2].z);
       Eigen::Vector3d swarm_start_pt = (cp0 + 4 * cp1 + cp2) / 6;
-      if ((swarm_start_pt - robot_location_now_).norm() > planning_horizen_ * 4.0f / 3.0f)
+      if ((swarm_start_pt - robot_location_now_fromOdomDirectly_).norm() > planning_horizen_ * 4.0f / 3.0f)
       {
         planner_manager_->swarm_paths_buf_[i].drone_id = -1;
         continue;
@@ -1004,7 +1004,7 @@ namespace ego_planner
       {
         // 失败时：若已是“预设/全局路径”且当前位置离终点很近，视为到达当前路点
         if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::USE_GLOBAL_PATH) &&
-            (robot_location_now_ - end_pt_).norm() < no_replan_thresh_)
+            (robot_location_now_fromOdomDirectly_ - end_pt_).norm() < no_replan_thresh_)
         {
           if (wp_id_ < waypoint_index_now_ - 1)
           {
@@ -1039,7 +1039,7 @@ namespace ego_planner
       {
         // 重规划失败：若为预设/全局路径模式且当前位置已“靠近当前路点终点”（距离 < no_replan_thresh_），视为到达当前路点
         if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::USE_GLOBAL_PATH) &&
-            (robot_location_now_ - end_pt_).norm() < no_replan_thresh_)
+            (robot_location_now_fromOdomDirectly_ - end_pt_).norm() < no_replan_thresh_)
         {
           if (wp_id_ < waypoint_index_now_ - 1)
           {
@@ -1092,7 +1092,7 @@ namespace ego_planner
         }
         if (globalpath_points.size() >= 2)
         {
-          Eigen::Vector3d robot_location = robot_location_now_;
+          Eigen::Vector3d robot_location = robot_location_now_fromOdomDirectly_;
           if (plan_xy_only_)
             robot_location(2) = 0.0;
           std::vector<Eigen::Vector3d> unfinished_points;
@@ -1183,11 +1183,11 @@ namespace ego_planner
       cout << "[当前在状态机里]当前状态是：EMERGENCY_STOP" << endl;
       if (flag_escape_emergency_) // Avoiding repeated calls
       {
-        callEmergencyStop(robot_location_now_);
+        callEmergencyStop(robot_location_now_fromOdomDirectly_);
       }
       else
       {
-        if (enable_fail_safe_ && odom_vel_.norm() < 0.1)
+        if (enable_fail_safe_ && robot_vel_now_fromOdomDirectly_.norm() < 0.1)
           changeFSMExecState(GEN_NEW_PATH, "FSM");
       }
 
@@ -1217,8 +1217,8 @@ namespace ego_planner
   bool classEGOPlannerStateMachine::planFromGlobalPath(const int trial_times /*=1*/) // zx-todo
   {
     // ---------- 以当前里程计位姿、速度作为规划的起点，加速度置零 ----------
-    start_pt_ = robot_location_now_;
-    start_vel_ = odom_vel_;
+    start_pt_ = robot_location_now_fromOdomDirectly_;
+    start_vel_ = robot_vel_now_fromOdomDirectly_;
     start_acc_.setZero();
     if (plan_xy_only_)
     {
@@ -1304,54 +1304,54 @@ namespace ego_planner
     return true;
   }
 
+  /**
+   * 安全检测回调：每 100ms 由定时器调用一次。检查 (1) 深度/传感器是否超时 (2) 当前轨迹是否与障碍或其它机发生碰撞；
+   * 若碰撞则尝试从当前轨迹重规划，失败则根据时间紧急程度切到 EMERGENCY_STOP 或 REPLAN_PATH。
+   */
   void classEGOPlannerStateMachine::function_checkStoneCallback_every100ms()
   {
-
     LocalPathData *info = &planner_manager_->local_data_;
     auto map = planner_manager_->grid_map_;
-    
+
+    // ---------- 未在执行路径或轨迹尚未有效时直接返回，不做碰撞检测 ----------
     if (current_state_ == WAIT_TARGET || info->start_time_.seconds() < 1e-5)
       return;
 
-    /* ---------- check lost of depth ---------- */
+    // ---------- 深度/传感器超时：视为丢失深度，立即紧急停并关闭 fail_safe ----------
     if (map->getOdomDepthTimeout())
     {
       RCLCPP_ERROR(node_->get_logger(), "Depth Lost! EMERGENCY_STOP");
-
       enable_fail_safe_ = false;
       changeFSMExecState(EMERGENCY_STOP, "SAFETY");
     }
 
-    /* ---------- check trajectory ---------- */
+    // ---------- 轨迹碰撞检测：从当前时刻 t_cur 起，沿轨迹以 0.01s 步长采样，检查每点是否占据障碍或与其它机过近 ----------
     constexpr double time_step = 0.01;
-    // double t_cur = (ros::Time::now() - info->start_time_).toSec();
     double t_cur = (rclcpp::Clock().now() - info->start_time_).seconds();
-
     Eigen::Vector3d p_cur = info->position_path_.evaluateDeBoorT(t_cur);
-    const double CLEARANCE = 1.0 * planner_manager_->getSwarmClearance();
-    // double t_cur_global = ros::Time::now().toSec();
+    const double CLEARANCE = 1.0 * planner_manager_->getSwarmClearance();  // 与其它机的最小间隔
     double t_cur_global = rclcpp::Clock().now().seconds();
 
+    // 仅检查轨迹前 2/3 段的有效性：若 t_cur 还在前 2/3，则只检查到 t_2_3 为止，避免对尚未执行到的后段误判
     double t_2_3 = info->duration_ * 2 / 3;
     for (double t = t_cur; t < info->duration_; t += time_step)
     {
-      if (t_cur < t_2_3 && t >= t_2_3) // If t_cur < t_2_3, only the first 2/3 partition of the trajectory is considered valid and will get checked.
+      if (t_cur < t_2_3 && t >= t_2_3)
         break;
 
       bool occ = false;
+      // 地图障碍：当前轨迹上 t 时刻位置是否在膨胀占据栅格内
       occ |= map->getInflateOccupancy(info->position_path_.evaluateDeBoorT(t));
 
+      // 集群：与其它机的预测位置距离小于 CLEARANCE 则视为碰撞
       for (size_t id = 0; id < planner_manager_->swarm_paths_buf_.size(); id++)
       {
         if ((planner_manager_->swarm_paths_buf_.at(id).drone_id != (int)id) || (planner_manager_->swarm_paths_buf_.at(id).drone_id == planner_manager_->pp_.drone_id))
-        {
           continue;
-        }
 
         double t_X = t_cur_global - planner_manager_->swarm_paths_buf_.at(id).start_time_.seconds();
         Eigen::Vector3d swarm_pridicted = planner_manager_->swarm_paths_buf_.at(id).position_path_.evaluateDeBoorT(t_X);
         double dist = (p_cur - swarm_pridicted).norm();
-
         if (dist < CLEARANCE)
         {
           occ = true;
@@ -1361,29 +1361,25 @@ namespace ego_planner
 
       if (occ)
       {
-
-        if (planFromCurrentPath()) // Make a chance
+        // 发现碰撞：先尝试从当前轨迹起点重规划一条新路径
+        if (planFromCurrentPath())
         {
           changeFSMExecState(EXEC_PATH, "SAFETY");
           publishSwarmPaths(false);
           return;
         }
+        // 重规划失败：若碰撞发生在近端（t - t_cur < emergency_time_）则紧急停，否则触发重规划状态
+        if (t - t_cur < emergency_time_)
+        {
+          RCLCPP_WARN(node_->get_logger(), "Suddenly discovered obstacles. emergency stop! time=%f", t - t_cur);
+          changeFSMExecState(EMERGENCY_STOP, "SAFETY");
+        }
         else
         {
-          if (t - t_cur < emergency_time_) // 0.8s of emergency time
-          {
-            RCLCPP_WARN(node_->get_logger(), "Suddenly discovered obstacles. emergency stop! time=%f", t - t_cur);
-
-            changeFSMExecState(EMERGENCY_STOP, "SAFETY");
-          }
-          else
-          {
-            RCLCPP_WARN(node_->get_logger(), "current path in collision, replan.");
-            changeFSMExecState(REPLAN_PATH, "SAFETY");
-          }
-          return;
+          RCLCPP_WARN(node_->get_logger(), "current path in collision, replan.");
+          changeFSMExecState(REPLAN_PATH, "SAFETY");
         }
-        break;
+        return;
       }
     }
   }
@@ -1396,6 +1392,8 @@ namespace ego_planner
    */
   bool classEGOPlannerStateMachine::plan7mLocalPPath_prepareAndDoit(bool flag_use_poly_init, bool flag_randomPolyTraj)
   {
+    // ---------- 根据最新 odometry 设置规划起点 start_pt_、start_vel_、start_acc_ ----------
+    getNowLocationAndVel();
     // ---------- 根据当前目标/路点更新局部目标 local_target_pt_、local_target_vel_（供 plan7mLocalPath 使用）----------
     get7mEndPoint();//执行此函数，获得了local_target_pt_, local_target_vel_
 
@@ -1543,6 +1541,20 @@ namespace ego_planner
     bspline_pub_->publish(bspline);
 
     return true;
+  }
+
+  void classEGOPlannerStateMachine::getNowLocationAndVel()
+  {
+    // robot_location_now_fromOdomDirectly_、robot_vel_now_fromOdomDirectly_ 由 autoFunction_GetOdometry 根据 /odometry（订阅名 odom_world）话题持续更新，此处即用该最新值作为规划起点
+    start_pt_ = robot_location_now_fromOdomDirectly_;
+    start_vel_ = robot_vel_now_fromOdomDirectly_;
+    start_acc_.setZero();
+    if (plan_xy_only_)
+    {
+      start_pt_(2) = 0.0;
+      start_vel_(2) = 0.0;
+      start_acc_(2) = 0.0;
+    }
   }
 
   void classEGOPlannerStateMachine::get7mEndPoint()

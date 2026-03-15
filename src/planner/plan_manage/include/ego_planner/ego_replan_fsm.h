@@ -76,7 +76,7 @@ namespace ego_planner
     FSM_EXEC_STATE current_state_;
     int continously_called_times_{0};
 
-    Eigen::Vector3d robot_location_now_, odom_vel_, odom_acc_; // odometry state
+    Eigen::Vector3d robot_location_now_fromOdomDirectly_, robot_vel_now_fromOdomDirectly_, odom_acc_; // odometry state
     Eigen::Quaterniond odom_orient_;
 
     Eigen::Vector3d init_pt_, start_pt_, start_vel_, start_acc_, start_yaw_; // start state
@@ -111,8 +111,12 @@ namespace ego_planner
     /* helper functions */
     bool planFromGlobalPath(const int trial_times = 1);
     bool plan7mLocalPPath_prepareAndDoit(bool flag_use_poly_init, bool flag_randomPolyTraj); // 调用规划局部路径
+    /** 根据最新一次 odometry 回调的数据，将 start_pt_、start_vel_、start_acc_ 设为当前位姿与速度（加速度置零，因话题无该字段） */
+    void getNowLocationAndVel();
+    /** 获取局部规划的终点 local_target_pt_、local_target_vel_ */
     void get7mEndPoint();
-
+    
+    
 
     bool callEmergencyStop(Eigen::Vector3d stop_pos);                          // front-end and back-end method
     bool planFromCurrentPath(const int trial_times = 1);
@@ -138,7 +142,7 @@ namespace ego_planner
     void function_checkStoneCallback_every100ms();
     void waypointCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg);
     void triggerCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg);
-    void odometryCallback(const std::shared_ptr<const nav_msgs::msg::Odometry> &msg);
+    void autoFunction_GetOdometry(const std::shared_ptr<const nav_msgs::msg::Odometry> &msg);
     void swarmPathsCallback(const std::shared_ptr<const path_tools::msg::MultiBsplines> &msg);
     void BroadcastBsplineCallback(const std::shared_ptr<const path_tools::msg::Bspline> &msg);
 
