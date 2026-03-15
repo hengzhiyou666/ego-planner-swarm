@@ -450,40 +450,41 @@ namespace ego_planner
     double ab = (b - robot_location).norm();
 
     // 4）从 b 开始，沿着路径方向向前“累积路径弧长”，走大约 ab 的长度，找到路径上的点 c
-    Eigen::Vector3d c = b;
+    Eigen::Vector3d cPointXyz = b;
     int c_index = b_index; // c 所在的线段起点索引
-    if (ab > 1e-3 && b_index < static_cast<int>(globalpath_points.size()) - 1)
+    if (ab > 0.1 && b_index < static_cast<int>(globalpath_points.size()) - 1)
     {
-      double remain = ab;
-      Eigen::Vector3d cur = b;
-      bool found_c = false;
+      double abRemain = ab;
+      Eigen::Vector3d currentPoint = b;
+      bool find_c = false;
       for (int i = b_index; i < static_cast<int>(globalpath_points.size()) - 1; ++i)
       {
-        Eigen::Vector3d next = globalpath_points[i + 1];
-        double seg_len = (next - cur).norm();
-        if (seg_len < 1e-6)
+        Eigen::Vector3d nextPoint = globalpath_points[i + 1];
+        double twoPointDistance = (nextPoint - currentPoint).norm();
+        if (twoPointDistance < 1e-3)
         {
-          cur = next;
+          currentPoint = nextPoint;
           continue;
         }
-        if (remain <= seg_len)
+        if (abRemain <= twoPointDistance)
         {
-          double ratio = remain / seg_len;
-          c = cur + ratio * (next - cur);
+          //找到c点了，并记录c的索引
+          double ratio = abRemain / twoPointDistance;
+          cPointXyz = currentPoint + ratio * (nextPoint - currentPoint);
           c_index = i;
-          found_c = true;
+          find_c = true;
           break;
         }
         else
         {
-          remain -= seg_len;
-          cur = next;
+          abRemain -= twoPointDistance;
+          currentPoint = nextPoint;
         }
       }
-      // 如果到路径末尾都没走完 remain，就把 c 放在最后一个点
-      if (!found_c)
+      // 如果到路径末尾都没走完 abRemain，就把 c 放在最后一个点
+      if (!find_c)
       {
-        c = globalpath_points.back();
+        cPointXyz = globalpath_points.back();
         c_index = static_cast<int>(globalpath_points.size()) - 2;
       }
     }
@@ -493,7 +494,7 @@ namespace ego_planner
     unfinished_pts.reserve(globalpath_points.size());
 
     // 5.1）先在当前位置到 c 之间，每隔约 0.1m 取一个点；如果 ac 很短，则只取两端
-    Eigen::Vector3d ac_vec = c - robot_location;
+    Eigen::Vector3d ac_vec = cPointXyz - robot_location;
     double ac_len = ac_vec.norm();
     const double ds = 0.1; // 10cm 步长
 
@@ -508,7 +509,7 @@ namespace ego_planner
         unfinished_pts.push_back(robot_location + dist * dir);
       }
       // 把 c 作为这一段的终点
-      unfinished_pts.push_back(c);
+      unfinished_pts.push_back(cPointXyz);
     }
 
     // 5.2）再把 c 之后的路径原样拼接上去（跳过 c 所在线段的起点，避免重复）
