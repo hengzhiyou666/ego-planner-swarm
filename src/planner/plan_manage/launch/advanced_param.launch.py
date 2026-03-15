@@ -48,6 +48,7 @@ def generate_launch_description():
     egoplanner_input_point_or_path = LaunchConfiguration('egoplanner_input_point_or_path', default=3)#输入模式：单点 / 预设点 / 参考路径
     try_more_paths_and_choose_best = LaunchConfiguration('try_more_paths_and_choose_best', default=True)
     plan_xy_only = LaunchConfiguration('plan_xy_only', default=True)
+    pct_path_skip_if_same = LaunchConfiguration('pct_path_skip_if_same', default=False)  # True：与上次路径相同时跳过计算；False：不判重，每次都执行
     
     num_of_dynamic_objects = LaunchConfiguration('num_of_dynamic_objects', default=10)
     
@@ -100,6 +101,10 @@ def generate_launch_description():
         default_value=try_more_paths_and_choose_best,
         description='是否尝试多条不同路径并从中挑选一条最优路径')
     plan_xy_only_arg = DeclareLaunchArgument('plan_xy_only', default_value=plan_xy_only, description='Plan in XY only, force z=0 (e.g. for robot dog)')
+    pct_path_skip_if_same_arg = DeclareLaunchArgument(
+        'pct_path_skip_if_same',
+        default_value=pct_path_skip_if_same,
+        description='True: skip computation when /pct_path same as last; False: no check, always execute')
     num_of_dynamic_objects_arg = DeclareLaunchArgument(
         'num_of_dynamic_objects',
         default_value=num_of_dynamic_objects,
@@ -148,6 +153,7 @@ parameters=[
             {'fsm/realworld_experiment': False},             # 是否为真实环境实验模式（影响安全策略）
             {'fsm/fail_safe': True},                         # 是否启用失败保护（规划失败时进入 EMERGENCY_STOP 等）
             {'fsm/plan_xy_only': plan_xy_only},              # 只在 XY 平面规划（机器狗等地面机器人）
+            {'fsm/pct_path_skip_if_same': pct_path_skip_if_same},  # True：与上次路径相同时跳过计算；False：不判重，每次都执行
 
             # 预设航路点（当目标模式为 PRESET_TARGET 时使用）
             {'fsm/waypoint_num': point_num},                 # 航路点数量
@@ -283,6 +289,7 @@ parameters=[
     launch_plan.add_action(egoplanner_input_point_or_path_arg)
     launch_plan.add_action(try_more_paths_and_choose_best_arg)
     launch_plan.add_action(plan_xy_only_arg)
+    launch_plan.add_action(pct_path_skip_if_same_arg)
     launch_plan.add_action(num_of_dynamic_objects_arg)
     launch_plan.add_action(drone_id_arg)
     launch_plan.add_action(input_pose_message_type_arg)

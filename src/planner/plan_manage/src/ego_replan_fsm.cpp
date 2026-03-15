@@ -31,6 +31,7 @@ namespace ego_planner
     node_->declare_parameter("fsm/realworld_experiment", false);
     node_->declare_parameter("fsm/fail_safe", true);
     node_->declare_parameter("fsm/plan_xy_only", false);
+    node_->declare_parameter("fsm/pct_path_skip_if_same", false);  // 默认不判重，与 robot.launch 一致
 
     node_->get_parameter("fsm/egoplanner_input_point_or_path", target_type_);
     node_->get_parameter("fsm/thresh_replan_time", replan_thresh_);
@@ -41,6 +42,21 @@ namespace ego_planner
     node_->get_parameter("fsm/realworld_experiment", flag_realworld_experiment_);
     node_->get_parameter("fsm/fail_safe", enable_fail_safe_);
     node_->get_parameter("fsm/plan_xy_only", plan_xy_only_);
+    // launch 传入的布尔常为字符串 "True"/"False"，需兼容解析
+    {
+      auto p = node_->get_parameter("fsm/pct_path_skip_if_same");
+      if (p.get_type() == rclcpp::ParameterType::PARAMETER_BOOL)
+        pct_path_skip_if_same_ = p.as_bool();
+      else if (p.get_type() == rclcpp::ParameterType::PARAMETER_STRING)
+      {
+        const std::string s = p.as_string();
+        pct_path_skip_if_same_ = (s == "true" || s == "True" || s == "1");
+      }
+      // 否则保持成员默认值 true
+      RCLCPP_INFO(node_->get_logger(), "fsm/pct_path_skip_if_same = %s (判重%s)",
+                  pct_path_skip_if_same_ ? "true" : "false",
+                  pct_path_skip_if_same_ ? "开启" : "关闭");
+    }
 
     have_trigger_ = !flag_realworld_experiment_;
 
@@ -519,28 +535,38 @@ namespace ego_planner
       RCLCPP_WARN(node_->get_logger(), "we have got globalpath, but it is empty!!! so we ignore it,return now.");
       return;
     }
-
-    // 1.5）路径判重：与上一帧路径相同则直接退出，不重复计算
-    constexpr double kPathCompareTol = 1e-6;
-    if (!last_pct_path_.poses.empty() &&
-        last_pct_path_.header.frame_id == globalpath->header.frame_id &&
-        last_pct_path_.poses.size() == globalpath->poses.size())
+    if (pct_path_skip_if_same_)
     {
-      bool same = true;
-      for (size_t i = 0; i < globalpath->poses.size(); ++i)
+      cout << "pct_path_skip_if_same_为True=================================================" << endl;
+    }
+    else
+    {
+      cout << "pct_path_skip_if_same_为False=================================================" << endl;
+    }
+    // 1.5）路径判重（可由参数关闭）：与上一帧路径相同则直接退出，不重复计算
+    if (pct_path_skip_if_same_)
+    {
+      constexpr double kPathCompareTol = 1e-6;
+      if (!last_pct_path_.poses.empty() &&
+          last_pct_path_.header.frame_id == globalpath->header.frame_id &&
+          last_pct_path_.poses.size() == globalpath->poses.size())
       {
-        const auto &a = last_pct_path_.poses[i].pose.position;
-        const auto &b = globalpath->poses[i].pose.position;
-        if (std::abs(a.x - b.x) > kPathCompareTol || std::abs(a.y - b.y) > kPathCompareTol || std::abs(a.z - b.z) > kPathCompareTol)
+        bool same = true;
+        for (size_t i = 0; i < globalpath->poses.size(); ++i)
         {
-          same = false;
-          break;
+          const auto &a = last_pct_path_.poses[i].pose.position;
+          const auto &b = globalpath->poses[i].pose.position;
+          if (std::abs(a.x - b.x) > kPathCompareTol || std::abs(a.y - b.y) > kPathCompareTol || std::abs(a.z - b.z) > kPathCompareTol)
+          {
+            same = false;
+            break;
+          }
         }
-      }
-      if (same)
-      {
-        RCLCPP_DEBUG(node_->get_logger(), "/pct_path 与上次相同，跳过计算。");
-        return;
+        if (same)
+        {
+          RCLCPP_DEBUG(node_->get_logger(), "/pct_path 与上次相同，跳过计算。");
+          return;
+        }
       }
     }
 

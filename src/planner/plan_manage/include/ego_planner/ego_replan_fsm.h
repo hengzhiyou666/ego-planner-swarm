@@ -65,6 +65,8 @@ namespace ego_planner
     bool flag_realworld_experiment_;
     bool enable_fail_safe_;
     bool plan_xy_only_{false};  // 机器狗等：仅用 xy，z 强制为 0
+    /** true：pctPathCallback 内与上次路径相同时跳过计算；false：不判重，每次都执行 */
+    bool pct_path_skip_if_same_{false};
 
     /* planning data */
     bool have_trigger_, have_target_, have_odom_, have_new_target_, have_recv_pre_agent_;

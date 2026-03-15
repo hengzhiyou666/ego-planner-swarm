@@ -35,6 +35,8 @@ def generate_launch_description():
     frame_id = LaunchConfiguration('frame_id', default='odom')
     # 是否自动启动 RViz（Fixed Frame: head_init；话题：/pct_path_unfinished, /odometry, /drone_0_plan_vis/optimal_list, /drone_0_plan_vis/goal_point）
     rviz = LaunchConfiguration('rviz', default='true')
+    # pct_path 判重：True=与上次路径相同时跳过计算；False=不检测，每次都执行
+    pct_path_skip_if_same = LaunchConfiguration('pct_path_skip_if_same', default=False)
     cx = LaunchConfiguration('cx', default='959.196655')
     cy = LaunchConfiguration('cy', default='538.812378')
     fx = LaunchConfiguration('fx', default='805.299072')
@@ -69,6 +71,8 @@ def generate_launch_description():
     launch_plan.add_action(DeclareLaunchArgument('fy', default_value=fy, description='Camera intrinsic fy'))
     launch_plan.add_action(DeclareLaunchArgument('rviz', default_value='true',
                                         description='Whether to auto-start RViz (config: Fixed Frame head_init, topics pct_path_unfinished, odometry, plan_vis)'))
+    launch_plan.add_action(DeclareLaunchArgument('pct_path_skip_if_same', default_value='false',
+                                        description='True: skip when /pct_path same as last; False: no check, always execute'))
 
     #=======================高级设置说明书advanced_param.launch.py===============================
     # ----- 规划器参数：真实机器狗用机器人话题与相机内参 -----
@@ -92,6 +96,7 @@ def generate_launch_description():
             'cx': cx, 'cy': cy, 'fx': fx, 'fy': fy,
             'input_pose_message_type': input_pose_message_type,
             'frame_id': frame_id,
+            'pct_path_skip_if_same': pct_path_skip_if_same,
 
             #规划器参数：不可从外部输入的，该处写好后固定的参数
             'max_vel': '2.0',  # 规划器允许的最大速度（单位：m/s）
