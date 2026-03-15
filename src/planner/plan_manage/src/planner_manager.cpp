@@ -48,13 +48,13 @@ namespace ego_planner
 
   // 规划局部路径：根据当前状态与局部目标，生成一条满足动力学约束的 B 样条轨迹（小白：算一段从当前点到前方目标点的可行路径）
   // flag_polyInit：是否用多项式重新生成初始路径；flag_randomPolyTraj：是否在初始路径中插入随机点
-  bool EGOPlannerManager::planLocalPath(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel,
+  bool EGOPlannerManager::plan7mLocalPath(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel,
                                         Eigen::Vector3d start_acc, Eigen::Vector3d local_target_pt,
                                         Eigen::Vector3d local_target_vel, bool flag_polyInit, bool flag_randomPolyTraj)
   {
     // ==================== 模块 0：入口与前置检查 ====================
     static int count = 0;
-    printf("\033[47;30m\n[robot replan 第%d次规划局部路径，开始规划...]==============================================\033[0m\n", count++);
+    printf("\033[47;30m\n[robot replan 「核心算法」第%d次规划局部路径，开始规划...plan7mLocalPath（）]==============================================\033[0m\n", count++);
 
     double distance_to_goal = (start_pt - local_target_pt).norm();
     if (distance_to_goal < 0.2)
@@ -100,7 +100,7 @@ namespace ego_planner
           // 后续 B 样条拟合会失败并可能导致数值问题。此时直接退回到多项式初始化方案。
           if (point_set.size() <= 3)
           {
-            std::cout << "[planLocalPath]: guide segment too short ("
+            std::cout << "[plan7mLocalPath]: guide segment too short ("
                       << point_set.size()
                       << " pts), fallback to polynomial init." << std::endl;
             use_guide = false;

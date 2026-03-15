@@ -11,7 +11,7 @@ namespace ego_planner
    * - 根据 target_type_ 订阅目标来源（MANUAL_TARGET→/move_base_simple/goal，PRESET_TARGET→/path_start_trigger 并阻塞至收到触发后 readGivenWps，USE_GLOBAL_PATH→/pct_path）。
    * - 创建 10ms 执行定时器与 100ms 安全检测定时器，以及 odom、swarm_paths、bspline 等订阅/发布。
    */
-  void EGOPlannerStateMachine::init(rclcpp::Node::SharedPtr &node)
+  void classEGOPlannerStateMachine::init(rclcpp::Node::SharedPtr &node)
   {
     node_ = node;
     
@@ -89,11 +89,11 @@ namespace ego_planner
     /* callback */
     // 执行定时器：每 10 ms 调用一次 FSM 回调，驱动状态机执行与轨迹跟踪
     exec_timer_ = node_->create_wall_timer(std::chrono::milliseconds(10),
-                                           std::bind(&EGOPlannerStateMachine::runWhichStateNow_every10ms, this));
+                                           std::bind(&classEGOPlannerStateMachine::function_runWhichStateNow_every10ms, this));
 
     // 安全定时器：每 100 ms 调用一次碰撞检测回调，检查障碍物并触发重规划
     safety_timer_ = node_->create_wall_timer(std::chrono::milliseconds(100),
-                                             std::bind(&EGOPlannerStateMachine::checkStoneCallback_every100ms, this));
+                                             std::bind(&classEGOPlannerStateMachine::function_checkStoneCallback_every100ms, this));
 
     //============================================订阅话题=========================================================
     odom_sub_ = node_->create_subscription<nav_msgs::msg::Odometry>(
@@ -103,7 +103,7 @@ namespace ego_planner
         {
           this->odometryCallback(msg);
         });
-    // std::bind(&EGOPlannerStateMachine::odometryCallback, this, std::placeholders::_1));
+    // std::bind(&classEGOPlannerStateMachine::odometryCallback, this, std::placeholders::_1));
 
     //============================================发布话题=========================================================
     if (planner_manager_->pp_.drone_id >= 1)
@@ -210,7 +210,7 @@ namespace ego_planner
    *   失败则退化为只规划到第一个路点。
    * - 其他情况（单路点、PRESET_TARGET、或上述失败）：仅对路点做可视化，并调用 planNextWaypoint(waypoints_array_xyz_[0]) 规划到第一个路点。
    */
-  void EGOPlannerStateMachine::readGivenWps()
+  void classEGOPlannerStateMachine::readGivenWps()
   {
     if (waypoint_index_now_ <= 0)
     {
@@ -419,7 +419,7 @@ namespace ego_planner
     planNextWaypoint(waypoints_array_xyz_[wp_id_]);
   }
 
-  bool EGOPlannerStateMachine::buildUnfinishedFromGlobalPath(const std::vector<Eigen::Vector3d> &globalpath_points,
+  bool classEGOPlannerStateMachine::buildUnfinishedFromGlobalPath(const std::vector<Eigen::Vector3d> &globalpath_points,
                                                              const Eigen::Vector3d &robot_location,
                                                              std::vector<Eigen::Vector3d> &unfinished_points_out,
                                                              nav_msgs::msg::Path *unfinished_path_out,
@@ -519,7 +519,7 @@ namespace ego_planner
   // /pct_path 话题回调：
   // 1）接收外部给的一整条“全局参考路径”（密集点，不再做稀疏采样）；
   // 2）与上次路径相同则直接退出不计算；不同则结合当前位置构造未走完路径并发布、取前 7m 引导并触发规划。
-  void EGOPlannerStateMachine::pctPathCallback(const std::shared_ptr<const nav_msgs::msg::Path> &globalpath)
+  void classEGOPlannerStateMachine::pctPathCallback(const std::shared_ptr<const nav_msgs::msg::Path> &globalpath)
   {
     cout << "检测到有新的/pct_path话题被发布，进入pctPathCallback()回调函数" << endl;
     // 如果此时还没有里程计，就没法知道“当前位置 a 在路径上的什么位置”，只能先忽略
@@ -662,7 +662,7 @@ namespace ego_planner
     last_pct_path_ = *globalpath;
   }
 
-  void EGOPlannerStateMachine::planNextWaypoint(const Eigen::Vector3d next_wp)
+  void classEGOPlannerStateMachine::planNextWaypoint(const Eigen::Vector3d next_wp)
   {
     Eigen::Vector3d wp = next_wp;
     if (plan_xy_only_)
@@ -705,14 +705,14 @@ namespace ego_planner
     }
   }
 
-  void EGOPlannerStateMachine::triggerCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg)
+  void classEGOPlannerStateMachine::triggerCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg)
   {
     have_trigger_ = true;
     cout << "Triggered!" << endl;
     init_pt_ = robot_location_now_;
   }
 
-  void EGOPlannerStateMachine::waypointCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg)
+  void classEGOPlannerStateMachine::waypointCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg)
   {
     if (msg->pose.position.z < -0.1)
       return;
@@ -726,7 +726,7 @@ namespace ego_planner
     planNextWaypoint(end_wp);
   }
 
-  void EGOPlannerStateMachine::odometryCallback(const std::shared_ptr<const nav_msgs::msg::Odometry> &msg)
+  void classEGOPlannerStateMachine::odometryCallback(const std::shared_ptr<const nav_msgs::msg::Odometry> &msg)
   {
     robot_location_now_(0) = msg->pose.pose.position.x;
     robot_location_now_(1) = msg->pose.pose.position.y;
@@ -746,7 +746,7 @@ namespace ego_planner
     have_odom_ = true;
   }
 
-  void EGOPlannerStateMachine::BroadcastBsplineCallback(const std::shared_ptr<const path_tools::msg::Bspline> &msg)
+  void classEGOPlannerStateMachine::BroadcastBsplineCallback(const std::shared_ptr<const path_tools::msg::Bspline> &msg)
   {
     size_t id = msg->drone_id;
     if ((int)id == planner_manager_->pp_.drone_id)
@@ -832,7 +832,7 @@ namespace ego_planner
     }
   }
 
-  void EGOPlannerStateMachine::swarmPathsCallback(const std::shared_ptr<const path_tools::msg::MultiBsplines> &msg)
+  void classEGOPlannerStateMachine::swarmPathsCallback(const std::shared_ptr<const path_tools::msg::MultiBsplines> &msg)
   {
 
     multi_bspline_msgs_buf_.path.clear();
@@ -915,7 +915,7 @@ namespace ego_planner
     have_recv_pre_agent_ = true;
   }
 
-  void EGOPlannerStateMachine::changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call)
+  void classEGOPlannerStateMachine::changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call)
   {
 
     if (new_state == current_state_)
@@ -929,12 +929,12 @@ namespace ego_planner
     cout << "[" + pos_call + "]: from " + state_str[pre_s] + " to " + state_str[int(new_state)] << endl;
   }
 
-  std::pair<int, EGOPlannerStateMachine::FSM_EXEC_STATE> EGOPlannerStateMachine::timesOfConsecutiveStateCalls()
+  std::pair<int, classEGOPlannerStateMachine::FSM_EXEC_STATE> classEGOPlannerStateMachine::timesOfConsecutiveStateCalls()
   {
     return std::pair<int, FSM_EXEC_STATE>(continously_called_times_, current_state_);
   }
 
-  void EGOPlannerStateMachine::printCurrentState()
+  void classEGOPlannerStateMachine::printCurrentState()
   {
     static string state_str[7] = {"STATE_ONE__WAIT_FOR_ODOM", "WAIT_TARGET", "GEN_NEW_PATH", "REPLAN_PATH", "EXEC_PATH", "EMERGENCY_STOP"};
 
@@ -942,7 +942,7 @@ namespace ego_planner
   }
 
   // 状态机主循环（由 10ms 定时器周期性调用）：根据当前 current_state_ 执行对应逻辑并驱动状态迁移（STATE_ONE__WAIT_FOR_ODOM→WAIT_TARGET→规划→EXEC_PATH/REPLAN_PATH 等）
-  void EGOPlannerStateMachine::runWhichStateNow_every10ms()
+  void classEGOPlannerStateMachine::function_runWhichStateNow_every10ms()
   {
     // ----- 防止本次回调还没跑完、下一次又来了，先停掉定时器，最后再 reset -----
     exec_timer_->cancel(); // To avoid blockage
@@ -1208,8 +1208,15 @@ namespace ego_planner
     }
   }
 
-  bool EGOPlannerStateMachine::planFromGlobalPath(const int trial_times /*=1*/) // zx-todo
+  /**
+   * 基于全局路径/路点，从当前机器人位姿（odom）作为起点规划一条局部轨迹。
+   * 与 planFromCurrentPath 的区别：本函数起点为“当前 odom 位置”，后者为“当前执行轨迹上 t_cur 时刻的位姿”。
+   * @param trial_times 最多尝试规划的次数，失败则依次重试（可配合多项式/随机初始化增加成功率）
+   * @return 成功生成可行局部路径返回 true，否则 false
+   */
+  bool classEGOPlannerStateMachine::planFromGlobalPath(const int trial_times /*=1*/) // zx-todo
   {
+    // ---------- 以当前里程计位姿、速度作为规划的起点，加速度置零 ----------
     start_pt_ = robot_location_now_;
     start_vel_ = odom_vel_;
     start_acc_.setZero();
@@ -1220,15 +1227,17 @@ namespace ego_planner
       start_acc_(2) = 0.0;
     }
 
+    // ---------- 是否使用随机多项式初始化：首次进入当前状态不用随机，后续重试时启用以增加多样性 ----------
     bool flag_random_poly_init;
     if (timesOfConsecutiveStateCalls().first == 1)
       flag_random_poly_init = false;
     else
       flag_random_poly_init = true;
 
+    // ---------- 最多尝试 trial_times 次，任一次 plan7mLocalPPath_prepareAndDoit 成功即返回 true ----------
     for (int i = 0; i < trial_times; i++)
     {
-      if (callPlanLocalPath(true, flag_random_poly_init))
+      if (plan7mLocalPPath_prepareAndDoit(true, flag_random_poly_init))
       {
         return true;
       }
@@ -1240,7 +1249,7 @@ namespace ego_planner
    * 从当前正在执行的轨迹上“现在”时刻的位置/速度/加速度作为起点，重新规划一条局部路径。
    * 规划采用三级回退：先不用多项式初始化 → 再用多项式初始化 → 最后用多项式+随机多项式轨迹，最多重试 trial_times 次。
    */
-  bool EGOPlannerStateMachine::planFromCurrentPath(const int trial_times /*=1*/)
+  bool classEGOPlannerStateMachine::planFromCurrentPath(const int trial_times /*=1*/)
   {
     LocalPathData *info = &planner_manager_->local_data_;
     auto time_now = rclcpp::Clock().now();
@@ -1258,7 +1267,7 @@ namespace ego_planner
     }
 
     // ---------- 第一级：不启用多项式初始化、不启用随机多项式 (flag_use_poly_init=false, flag_randomPolyTraj=false) ----------
-    bool success = callPlanLocalPath(false, false);
+    bool success = plan7mLocalPPath_prepareAndDoit(false, false);
     if(success)
     {
       cout << "第一级：不启用多项式初始化、不启用随机多项式 (flag_use_poly_init=false, flag_randomPolyTraj=false) 规划成功" << endl;
@@ -1267,7 +1276,7 @@ namespace ego_planner
     if (!success)
     {
       // ---------- 第二级：启用多项式初始化，不启用随机多项式 ----------
-      success = callPlanLocalPath(true, false);
+      success = plan7mLocalPPath_prepareAndDoit(true, false);
       if(success)
       {
         cout << "第二级：启用多项式初始化，不启用随机多项式 (flag_use_poly_init=true, flag_randomPolyTraj=false) 规划成功" << endl;
@@ -1278,7 +1287,7 @@ namespace ego_planner
         // ---------- 第三级：启用多项式初始化 + 随机多项式轨迹，最多重试 trial_times 次 ----------
         for (int i = 0; i < trial_times; i++)
         {
-          success = callPlanLocalPath(true, true);
+          success = plan7mLocalPPath_prepareAndDoit(true, true);
           if (success)
           {
             cout << "第三级：启用多项式初始化 + 随机多项式轨迹，最多重试 trial_times 次 规划成功" << endl;
@@ -1295,7 +1304,7 @@ namespace ego_planner
     return true;
   }
 
-  void EGOPlannerStateMachine::checkStoneCallback_every100ms()
+  void classEGOPlannerStateMachine::function_checkStoneCallback_every100ms()
   {
 
     LocalPathData *info = &planner_manager_->local_data_;
@@ -1379,28 +1388,35 @@ namespace ego_planner
     }
   }
 
-  bool EGOPlannerStateMachine::callPlanLocalPath(bool flag_use_poly_init, bool flag_randomPolyTraj)
+  /**
+   * 调用规划器生成一条从 start_pt_ 到局部目标 local_target_pt_ 的 B 样条局部路径，并发布给轨迹执行与可视化。
+   * @param flag_use_poly_init 是否使用多项式初始化轨迹（重规划/重试时多为 true）
+   * @param flag_randomPolyTraj 是否在初始化时加入随机多项式轨迹以增加多样性，提高在复杂障碍下的成功率
+   * @return 规划与时间重分配均成功且轨迹无碰撞返回 true，否则 false
+   */
+  bool classEGOPlannerStateMachine::plan7mLocalPPath_prepareAndDoit(bool flag_use_poly_init, bool flag_randomPolyTraj)
   {
+    // ---------- 根据当前目标/路点更新局部目标 local_target_pt_、local_target_vel_（供 plan7mLocalPath 使用）----------
+    get7mEndPoint();//执行此函数，获得了local_target_pt_, local_target_vel_
 
-    getLocalTarget();
-
+    // ---------- 调用规划器：起点 (start_pt_, start_vel_, start_acc_)，终点 (local_target_pt_, local_target_vel_)；结果写入 planner_manager_->local_data_ ----------
     bool plan_and_refine_success =
-        planner_manager_->planLocalPath(start_pt_, start_vel_, start_acc_, local_target_pt_, local_target_vel_, (have_new_target_ || flag_use_poly_init), flag_randomPolyTraj);
+        planner_manager_->plan7mLocalPath(start_pt_, start_vel_, start_acc_, local_target_pt_, local_target_vel_, (have_new_target_ || flag_use_poly_init), flag_randomPolyTraj);
     have_new_target_ = false;
 
     cout << "refine_success=" << plan_and_refine_success;
     if (plan_and_refine_success)
     {
-      cout << "（规划与时间重分配成功，轨迹可行且未碰撞）" << endl;
+      cout << "（规划与时间重分配成功，轨迹可行）" << endl;
     }
     else
     {
-      cout << "（规划或时间重分配失败，轨迹不可行或发生碰撞）" << endl;
+      cout << "（规划或时间重分配失败，轨迹不可行）" << endl;
     }
 
+    // ---------- 规划成功时：将 local_data_ 中的 B 样条转为 ROS 消息并发布、可视化 ----------
     if (plan_and_refine_success)
     {
-
       auto info = &planner_manager_->local_data_;
 
       path_tools::msg::Bspline bspline;
@@ -1408,6 +1424,7 @@ namespace ego_planner
       bspline.start_time = info->start_time_;
       bspline.path_id = info->path_id_;
 
+      // 控制点：从 position_path_ 的矩阵按列转为 geometry_msgs::Point 数组
       Eigen::MatrixXd pos_pts = info->position_path_.getControlPoint();
       bspline.pos_pts.reserve(pos_pts.cols());
       for (int i = 0; i < pos_pts.cols(); ++i)
@@ -1419,27 +1436,27 @@ namespace ego_planner
         bspline.pos_pts.push_back(pt);
       }
 
+      // 节点向量：定义 B 样条基函数与参数化
       Eigen::VectorXd knots = info->position_path_.getKnot();
-
       bspline.knots.reserve(knots.rows());
       for (int i = 0; i < knots.rows(); ++i)
       {
         bspline.knots.push_back(knots(i));
       }
 
-      /* 1. publish path to path_server */
+      /* 1. 发布给 path_server / 轨迹执行节点 */
       bspline_pub_->publish(bspline);
 
-      /* 2. publish path to the next drone of swarm */
+      /* 2. 集群中下一架无人机的路径由 publishSwarmPaths 等逻辑单独发布 */
 
-      /* 3. publish path for visualization */
+      /* 3. 发布到 RViz 等可视化 */
       visualization_->displayOptimalList(info->position_path_.get_control_points(), 0);
     }
 
     return plan_and_refine_success;
   }
 
-  void EGOPlannerStateMachine::publishSwarmPaths(bool startup_pub)
+  void classEGOPlannerStateMachine::publishSwarmPaths(bool startup_pub)
   {
     auto info = &planner_manager_->local_data_;
 
@@ -1491,7 +1508,7 @@ namespace ego_planner
     broadcast_bspline_pub_->publish(bspline);
   }
 
-  bool EGOPlannerStateMachine::callEmergencyStop(Eigen::Vector3d stop_pos)
+  bool classEGOPlannerStateMachine::callEmergencyStop(Eigen::Vector3d stop_pos)
   {
     if (plan_xy_only_)
       stop_pos(2) = 0.0;
@@ -1528,7 +1545,7 @@ namespace ego_planner
     return true;
   }
 
-  void EGOPlannerStateMachine::getLocalTarget()
+  void classEGOPlannerStateMachine::get7mEndPoint()
   {
     // USE_GLOBAL_PATH 模式：引导段取自 /pct_path_unfinished 前 7m 且去掉最前5个点的 guide_path_7m_withoutFirst5points_fsm_h_
     if (target_type_ == TARGET_TYPE::USE_GLOBAL_PATH && !guide_path_7m_withoutFirst5points_fsm_h_.empty())

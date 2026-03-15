@@ -17,7 +17,7 @@ int main(int argc, char **argv)  // 主函数，程序入口
   auto node = std::make_shared<rclcpp::Node>("ego_planner_node");
 
   // 在栈上创建 EGO 规划器状态机（负责状态切换与规划调度），init 绑定节点并完成初始化
-  EGOPlannerStateMachine egoPlanner_stateMachine;
+  classEGOPlannerStateMachine egoPlanner_stateMachine;
   egoPlanner_stateMachine.init(node);
 
   rclcpp::spin(node);   // 阻塞式运行节点：持续处理回调（定时器、订阅等），直到 Ctrl+C 或 shutdown

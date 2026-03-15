@@ -27,7 +27,7 @@ using std::vector;
 namespace ego_planner
 {
 
-  class EGOPlannerStateMachine
+  class classEGOPlannerStateMachine
   {
 
   private:
@@ -109,14 +109,17 @@ namespace ego_planner
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pct_path_unfinished_pub_;    // 发布“从当前位置开始还没走完的参考路径”/pct_path_unfinished
 
     /* helper functions */
-    bool callPlanLocalPath(bool flag_use_poly_init, bool flag_randomPolyTraj); // 调用规划局部路径
-    bool callEmergencyStop(Eigen::Vector3d stop_pos);                          // front-end and back-end method
     bool planFromGlobalPath(const int trial_times = 1);
+    bool plan7mLocalPPath_prepareAndDoit(bool flag_use_poly_init, bool flag_randomPolyTraj); // 调用规划局部路径
+    void get7mEndPoint();
+
+
+    bool callEmergencyStop(Eigen::Vector3d stop_pos);                          // front-end and back-end method
     bool planFromCurrentPath(const int trial_times = 1);
 
     /* return value: std::pair< Times of the same state be continuously called, current continuously called state > */
     void changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call);
-    std::pair<int, EGOPlannerStateMachine::FSM_EXEC_STATE> timesOfConsecutiveStateCalls();
+    std::pair<int, classEGOPlannerStateMachine::FSM_EXEC_STATE> timesOfConsecutiveStateCalls();
     void printCurrentState();
 
     void readGivenWps();
@@ -128,11 +131,11 @@ namespace ego_planner
                                        nav_msgs::msg::Path *unfinished_path_out = nullptr,
                                        const std_msgs::msg::Header *path_header = nullptr);
     void planNextWaypoint(const Eigen::Vector3d next_wp);
-    void getLocalTarget();
+    
 
     /* ROS functions */
-    void runWhichStateNow_every10ms();
-    void checkStoneCallback_every100ms();
+    void function_runWhichStateNow_every10ms();
+    void function_checkStoneCallback_every100ms();
     void waypointCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg);
     void triggerCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg);
     void odometryCallback(const std::shared_ptr<const nav_msgs::msg::Odometry> &msg);
@@ -143,10 +146,10 @@ namespace ego_planner
     void publishSwarmPaths(bool startup_pub);
 
   public:
-    EGOPlannerStateMachine(/* args */)
+    classEGOPlannerStateMachine(/* args */)
     {
     }
-    ~EGOPlannerStateMachine()
+    ~classEGOPlannerStateMachine()
     {
     }
 

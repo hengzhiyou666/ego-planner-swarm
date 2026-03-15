@@ -29,7 +29,7 @@ namespace ego_planner
 
     /* main planning interface */
     // 给当前起点/终点做一次“弹跳式重规划”：在当前路径基础上重新生成一条更安全/更顺滑的局部路径
-    bool planLocalPath(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel, Eigen::Vector3d start_acc,
+    bool plan7mLocalPath(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel, Eigen::Vector3d start_acc,
                        Eigen::Vector3d end_pt, Eigen::Vector3d end_vel, bool flag_polyInit, bool flag_randomPolyTraj);
     // 紧急停车：在当前位置附近快速生成一条“刹停路径”，让无人机尽快、安全地停下来
     bool EmergencyStop(Eigen::Vector3d stop_pos);
