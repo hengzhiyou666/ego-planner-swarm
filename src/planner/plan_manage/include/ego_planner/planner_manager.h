@@ -58,7 +58,7 @@ namespace ego_planner
 
     PlanParameters pp_;
     LocalPathData local_data_;
-    GlobalPathData global_data_;
+    GlobalPathData global_path_afterCalculate_;
     GridMap::Ptr grid_map_;
     /* 局部规划使用的引导路径：从全局路径上最近点起向前约 7m 的一段 */
     std::vector<Eigen::Vector3d> guide_path_7m_withoutFirst5points_manager_h_;

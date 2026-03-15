@@ -480,7 +480,7 @@ namespace ego_planner
     time(0) *= 2.0;
     time(time.rows() - 1) *= 2.0;
 
-    // ---------- 模块 5：根据点数生成全局多项式路径（≥3 点 minSnap，2 点单段），并写入 global_data_ ----------
+    // ---------- 模块 5：根据点数生成全局多项式路径（≥3 点 minSnap，2 点单段），并写入 global_path_afterCalculate_ ----------
     PolynomialPath gl_path;
     if (pos.cols() >= 3)
       // 多点：最小 snap 多项式拟合，满足起止速度/加速度约束及每段时间 time
@@ -492,8 +492,8 @@ namespace ego_planner
       // 0 或 1 个点无法生成路径
       return false;
     auto time_now = rclcpp::Clock().now();
-    // 将生成的全局路径与当前时间写入 global_data_，供后续局部规划/轨迹跟踪使用
-    global_data_.setGlobalPath(gl_path, time_now);
+    // 将生成的全局路径与当前时间写入 global_path_afterCalculate_，供后续局部规划/轨迹跟踪使用
+    global_path_afterCalculate_.setGlobalPath(gl_path, time_now);
 
     return true;
   }
@@ -560,7 +560,7 @@ namespace ego_planner
 
     auto time_now = rclcpp::Clock().now();
 
-    global_data_.setGlobalPath(gl_path, time_now);
+    global_path_afterCalculate_.setGlobalPath(gl_path, time_now);
 
     return true;
   }

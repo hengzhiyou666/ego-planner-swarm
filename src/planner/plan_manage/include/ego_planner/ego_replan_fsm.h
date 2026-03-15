@@ -120,8 +120,8 @@ namespace ego_planner
     void getLocalTarget();
 
     /* ROS functions */
-    void runWhichStateNow_10ms();
-    void checkCollisionCallback();
+    void runWhichStateNow_every10ms();
+    void checkStoneCallback_every100ms();
     void waypointCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg);
     void triggerCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg);
     void odometryCallback(const std::shared_ptr<const nav_msgs::msg::Odometry> &msg);
