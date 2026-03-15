@@ -50,6 +50,7 @@ void GridMap::initMap(rclcpp::Node::SharedPtr node)
   node_->declare_parameter("grid_map/local_map_margin", 1);
   node_->declare_parameter("grid_map/ground_height", 1.0);
   node_->declare_parameter("grid_map/odom_depth_timeout", 1.0);
+  node_->declare_parameter("grid_map/use_depth_for_occupancy", false);
 
   node_->get_parameter("grid_map/resolution", mp_.resolution_);
   node_->get_parameter("grid_map/map_size_x", x_size);
@@ -87,6 +88,9 @@ void GridMap::initMap(rclcpp::Node::SharedPtr node)
   node_->get_parameter("grid_map/local_map_margin", mp_.local_map_margin_);
   node_->get_parameter("grid_map/ground_height", mp_.ground_height_);
   node_->get_parameter("grid_map/odom_depth_timeout", mp_.odom_depth_timeout_);
+  node_->get_parameter("grid_map/use_depth_for_occupancy", mp_.use_depth_for_occupancy_);
+  if (!mp_.use_depth_for_occupancy_)
+    RCLCPP_INFO(node_->get_logger(), "grid_map: obstacle from point cloud only (grid_map/cloud), depth not used.");
 
   if (mp_.virtual_ceil_height_ - mp_.ground_height_ > z_size)
   {
@@ -140,36 +144,37 @@ void GridMap::initMap(rclcpp::Node::SharedPtr node)
 
   /* init callback */
 
-  // 初始化 message_filters::Subscriber
-  depth_sub_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(
-      node_, "grid_map/depth", rclcpp::QoS(50).get_rmw_qos_profile());
-
   extrinsic_sub_ = node_->create_subscription<nav_msgs::msg::Odometry>(
       "/vins_estimator/extrinsic", 10,
       std::bind(&GridMap::extrinsicCallback, this, std::placeholders::_1));
 
-  if (mp_.input_pose_message_type_ == POSE_STAMPED)
+  // 仅当使用深度参与占据更新时才订阅深度图并做深度+位姿同步；否则仅用点云避障
+  if (mp_.use_depth_for_occupancy_)
   {
-    pose_sub_ = std::make_shared<message_filters::Subscriber<geometry_msgs::msg::PoseStamped>>(
-        node_, "grid_map/pose", rclcpp::QoS(25).get_rmw_qos_profile());
+    depth_sub_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(
+        node_, "grid_map/depth", rclcpp::QoS(50).get_rmw_qos_profile());
 
-    sync_image_pose_ = std::make_shared<message_filters::Synchronizer<SyncPolicyImagePose>>(
-        SyncPolicyImagePose(100), *depth_sub_, *pose_sub_);
-    sync_image_pose_->registerCallback(
-        std::bind(&GridMap::depthPoseCallback, this, std::placeholders::_1, std::placeholders::_2));
+    if (mp_.input_pose_message_type_ == POSE_STAMPED)
+    {
+      pose_sub_ = std::make_shared<message_filters::Subscriber<geometry_msgs::msg::PoseStamped>>(
+          node_, "grid_map/pose", rclcpp::QoS(25).get_rmw_qos_profile());
+      sync_image_pose_ = std::make_shared<message_filters::Synchronizer<SyncPolicyImagePose>>(
+          SyncPolicyImagePose(100), *depth_sub_, *pose_sub_);
+      sync_image_pose_->registerCallback(
+          std::bind(&GridMap::depthPoseCallback, this, std::placeholders::_1, std::placeholders::_2));
+    }
+    else if (mp_.input_pose_message_type_ == ODOMETRY)
+    {
+      odom_sub_ = std::make_shared<message_filters::Subscriber<nav_msgs::msg::Odometry>>(
+          node_, "grid_map/odom", rclcpp::QoS(100).get_rmw_qos_profile());
+      sync_image_odom_ = std::make_shared<message_filters::Synchronizer<SyncPolicyImageOdom>>(
+          SyncPolicyImageOdom(100), *depth_sub_, *odom_sub_);
+      sync_image_odom_->registerCallback(
+          std::bind(&GridMap::depthOdomCallback, this, std::placeholders::_1, std::placeholders::_2));
+    }
   }
-  else if (mp_.input_pose_message_type_ == ODOMETRY)
-  {
-    odom_sub_ = std::make_shared<message_filters::Subscriber<nav_msgs::msg::Odometry>>(
-        node_, "grid_map/odom", rclcpp::QoS(100).get_rmw_qos_profile());
 
-    sync_image_odom_ = std::make_shared<message_filters::Synchronizer<SyncPolicyImageOdom>>(
-        SyncPolicyImageOdom(100), *depth_sub_, *odom_sub_);
-    sync_image_odom_->registerCallback(
-        std::bind(&GridMap::depthOdomCallback, this, std::placeholders::_1, std::placeholders::_2));
-  }
-
-  // 使用独立的里程计和点云订阅
+  // 点云与里程计：点云用于占据更新（仅点云避障或与深度融合），里程计提供相机/机体位置
   indep_cloud_sub_ = node_->create_subscription<sensor_msgs::msg::PointCloud2>(
       "grid_map/cloud", 10, std::bind(&GridMap::cloudCallback, this, std::placeholders::_1));
 
@@ -715,6 +720,17 @@ void GridMap::updateOccupancyCallback()
 {
   if (md_.last_occ_update_time_.seconds() < 1.0)
     md_.last_occ_update_time_ = node_->now();
+
+  // 仅点云避障：不依赖深度，只根据点云回调设置的 local_updated_ 做膨胀/清理，不做深度超时检测
+  if (!mp_.use_depth_for_occupancy_)
+  {
+    if (md_.local_updated_)
+    {
+      clearAndInflateLocalMap();
+      md_.local_updated_ = false;
+    }
+    return;
+  }
 
   if (!md_.occ_need_update_)
   {

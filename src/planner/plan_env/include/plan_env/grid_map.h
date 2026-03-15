@@ -90,6 +90,9 @@ struct MappingParameters
 
   /* active mapping */
   double unknown_flag_;
+
+  /** true：使用深度图+位姿更新占据栅格（避障）；false：仅使用点云 grid_map/cloud 更新占据栅格（仅点云避障） */
+  bool use_depth_for_occupancy_;
 };
 
 // intermediate mapping data for fusion
@@ -196,7 +199,8 @@ public:
   inline double getResolution();
   Eigen::Vector3d getOrigin();
   int getVoxelNum();
-  bool getOdomDepthTimeout() { return md_.flag_depth_odom_timeout_; }
+  /** 仅在使用深度参与占据更新时为 true（深度/odom 超时）；仅点云避障时恒为 false，不触发“深度丢失”紧急停 */
+  bool getOdomDepthTimeout() { return mp_.use_depth_for_occupancy_ && md_.flag_depth_odom_timeout_; }
 
   typedef std::shared_ptr<GridMap> Ptr;
 
