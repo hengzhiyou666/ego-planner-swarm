@@ -1,4 +1,5 @@
 #include <ego_planner/ego_replan_fsm.h>
+#include <cmath>
 #include <limits>
 
 namespace ego_planner
@@ -408,7 +409,7 @@ namespace ego_planner
   // 3）在 pct_path_unfinished 里，从 a 开始累计大约 7m 的一小段，作为局部规划的引导路径喂给 EGO Planner。
   void EGOPlannerStateMachine::pctPathCallback(const std::shared_ptr<const nav_msgs::msg::Path> &globalpath)
   {
-    cout << "进入pctPathCallback()回调函数" << endl;
+    cout << "检测到有新的/pct_path话题被发布，进入pctPathCallback()回调函数" << endl;
     // 如果此时还没有里程计，就没法知道“当前位置 a 在路径上的什么位置”，只能先忽略
     if (!have_odom_)
     {
@@ -421,6 +422,29 @@ namespace ego_planner
     {
       RCLCPP_WARN(node_->get_logger(), "we have got globalpath, but it is empty!!! so we ignore it,return now.");
       return;
+    }
+
+    // 1.5）路径判重：与上一帧路径相同则直接退出，不重复计算
+    constexpr double kPathCompareTol = 1e-6;
+    if (!last_pct_path_.poses.empty() &&
+        last_pct_path_.header.frame_id == globalpath->header.frame_id &&
+        last_pct_path_.poses.size() == globalpath->poses.size())
+    {
+      bool same = true;
+      for (size_t i = 0; i < globalpath->poses.size(); ++i)
+      {
+        const auto &a = last_pct_path_.poses[i].pose.position;
+        const auto &b = globalpath->poses[i].pose.position;
+        if (std::abs(a.x - b.x) > kPathCompareTol || std::abs(a.y - b.y) > kPathCompareTol || std::abs(a.z - b.z) > kPathCompareTol)
+        {
+          same = false;
+          break;
+        }
+      }
+      if (same)
+      {
+        return;
+      }
     }
 
     // 2）先把原始 /pct_path 中的所有点转成 Eigen 向量，保留“密集路径”（不做降采样）
@@ -605,6 +629,9 @@ namespace ego_planner
 
     // 8）把采样好的 waypoints_array_ 转换成内部的 waypoints_array_xyz_ 向量，并调用原有多路点规划逻辑
     readGivenWps();
+
+    // 保存当前路径，供下次回调判重
+    last_pct_path_ = *globalpath;
   }
 
   void EGOPlannerStateMachine::planNextWaypoint(const Eigen::Vector3d next_wp)

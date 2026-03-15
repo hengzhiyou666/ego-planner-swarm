@@ -68,6 +68,8 @@ namespace ego_planner
     /* planning data */
     bool have_trigger_, have_target_, have_odom_, have_new_target_, have_recv_pre_agent_;
     bool have_pct_path_{false};
+    /** 上一帧处理过的 /pct_path，用于 pctPathCallback 内判重，相同则跳过计算 */
+    nav_msgs::msg::Path last_pct_path_;
     FSM_EXEC_STATE current_state_;
     int continously_called_times_{0};
 
