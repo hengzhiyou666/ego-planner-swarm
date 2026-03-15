@@ -9,6 +9,7 @@
 #include "sensor_msgs/msg/imu.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/empty.hpp"
+#include "std_msgs/msg/header.hpp"
 #include <vector>
 #include "visualization_msgs/msg/marker.hpp"
 
@@ -118,6 +119,12 @@ namespace ego_planner
 
     void readGivenWps();
     void pctPathCallback(const std::shared_ptr<const nav_msgs::msg::Path> &globalpath);
+    /** 由全局路径点 + 当前位置 构造“未走完路径”点列；可选写出 nav_msgs::Path 用于发布。供 pctPathCallback 与 EXEC 向前推进共用。 */
+    bool buildUnfinishedFromGlobalPath(const std::vector<Eigen::Vector3d> &globalpath_points,
+                                       const Eigen::Vector3d &robot_location,
+                                       std::vector<Eigen::Vector3d> &unfinished_points_out,
+                                       nav_msgs::msg::Path *unfinished_path_out = nullptr,
+                                       const std_msgs::msg::Header *path_header = nullptr);
     void planNextWaypoint(const Eigen::Vector3d next_wp);
     void getLocalTarget();
 

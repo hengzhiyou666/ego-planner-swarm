@@ -403,10 +403,106 @@ namespace ego_planner
     planNextWaypoint(waypoints_array_xyz_[wp_id_]);
   }
 
+  bool EGOPlannerStateMachine::buildUnfinishedFromGlobalPath(const std::vector<Eigen::Vector3d> &globalpath_points,
+                                                             const Eigen::Vector3d &robot_location,
+                                                             std::vector<Eigen::Vector3d> &unfinished_points_out,
+                                                             nav_msgs::msg::Path *unfinished_path_out,
+                                                             const std_msgs::msg::Header *path_header)
+  {
+    if (globalpath_points.size() < 2)
+      return false;
+    unfinished_points_out.clear();
+
+    // 在全局路径中找离 robot_location 最近的点 b
+    int b_index = 0;
+    double minDistance = std::numeric_limits<double>::infinity();
+    for (int i = 0; i < static_cast<int>(globalpath_points.size()); ++i)
+    {
+      double d2 = (globalpath_points[i] - robot_location).squaredNorm();
+      if (d2 < minDistance)
+      {
+        minDistance = d2;
+        b_index = i;
+      }
+    }
+    Eigen::Vector3d b = globalpath_points[b_index];
+    double ab = (b - robot_location).norm();
+
+    // 从 b 沿路径向前累积弧长 ab，得到点 c
+    Eigen::Vector3d cPointXyz = b;
+    int c_index = b_index;
+    if (ab > 0.1 && b_index < static_cast<int>(globalpath_points.size()) - 1)
+    {
+      double abRemain = ab;
+      Eigen::Vector3d currentPoint = b;
+      bool find_c = false;
+      for (int i = b_index; i < static_cast<int>(globalpath_points.size()) - 1; ++i)
+      {
+        Eigen::Vector3d nextPoint = globalpath_points[i + 1];
+        double seg = (nextPoint - currentPoint).norm();
+        if (seg < 1e-3)
+        {
+          currentPoint = nextPoint;
+          continue;
+        }
+        if (abRemain <= seg)
+        {
+          double ratio = abRemain / seg;
+          cPointXyz = currentPoint + ratio * (nextPoint - currentPoint);
+          c_index = i;
+          find_c = true;
+          break;
+        }
+        abRemain -= seg;
+        currentPoint = nextPoint;
+      }
+      if (!find_c)
+      {
+        cPointXyz = globalpath_points.back();
+        c_index = static_cast<int>(globalpath_points.size()) - 2;
+      }
+    }
+
+    const double oneStepLength = 0.1;
+    unfinished_points_out.reserve(static_cast<int>(ab / 0.1) + globalpath_points.size() + 1);
+
+    Eigen::Vector3d ac_vector = cPointXyz - robot_location;
+    double ac_len = ac_vector.norm();
+    unfinished_points_out.push_back(robot_location);
+    if (ac_len > 0.2)
+    {
+      int stepsNumber = static_cast<int>(std::floor(ac_len / oneStepLength));
+      Eigen::Vector3d ac_unit = ac_vector / ac_len;
+      for (int i = 1; i < stepsNumber; i++)
+        unfinished_points_out.push_back(robot_location + (i * oneStepLength) * ac_unit);
+    }
+    unfinished_points_out.push_back(cPointXyz);
+    for (int i = c_index + 1; i < static_cast<int>(globalpath_points.size()); ++i)
+      unfinished_points_out.push_back(globalpath_points[i]);
+
+    if (unfinished_path_out && path_header)
+    {
+      unfinished_path_out->header = *path_header;
+      unfinished_path_out->poses.resize(unfinished_points_out.size());
+      for (size_t i = 0; i < unfinished_points_out.size(); ++i)
+      {
+        auto &ps = unfinished_path_out->poses[i];
+        ps.header = *path_header;
+        ps.pose.position.x = unfinished_points_out[i].x();
+        ps.pose.position.y = unfinished_points_out[i].y();
+        ps.pose.position.z = unfinished_points_out[i].z();
+        ps.pose.orientation.x = 0.0;
+        ps.pose.orientation.y = 0.0;
+        ps.pose.orientation.z = 0.0;
+        ps.pose.orientation.w = 1.0;
+      }
+    }
+    return true;
+  }
+
   // /pct_path 话题回调：
   // 1）接收外部给的一整条“全局参考路径”（密集点，不再做稀疏采样）；
-  // 2）结合当前里程计位置 a，切掉“已经走过的前半段”，得到从 a 开始的未走完路径 pct_path_unfinished 并发布到 /pct_path_unfinished；
-  // 3）在 pct_path_unfinished 里，从 a 开始累计大约 7m 的一小段，作为局部规划的引导路径喂给 EGO Planner。
+  // 2）与上次路径相同则直接退出不计算；不同则结合当前位置构造未走完路径并发布、取前 7m 引导并触发规划。
   void EGOPlannerStateMachine::pctPathCallback(const std::shared_ptr<const nav_msgs::msg::Path> &globalpath)
   {
     cout << "检测到有新的/pct_path话题被发布，进入pctPathCallback()回调函数" << endl;
@@ -443,14 +539,15 @@ namespace ego_planner
       }
       if (same)
       {
+        RCLCPP_DEBUG(node_->get_logger(), "/pct_path 与上次相同，跳过计算。");
         return;
       }
     }
 
-    // 2）先把原始 /pct_path 中的所有点转成 Eigen 向量，保留“密集路径”（不做降采样）
+    // 2）把 /pct_path 转成 Eigen 点列，并得到“未走完路径” unfinished_points
     std::vector<Eigen::Vector3d> globalpath_points;
-    globalpath_points.reserve(globalpath->poses.size());  // 预分配容量，避免后续 push_back 时多次扩容
-    for (const auto &ps : globalpath->poses)  // 遍历 globalpath 中的每个点
+    globalpath_points.reserve(globalpath->poses.size());
+    for (const auto &ps : globalpath->poses)
     {
       const auto &p = ps.pose.position;
       Eigen::Vector3d pt(p.x, p.y, p.z);
@@ -463,115 +560,20 @@ namespace ego_planner
       RCLCPP_WARN(node_->get_logger(), "全局路径点太少了，globalpath_points has less than 2 points, ignore.");
       return;
     }
-
-    // 当前里程计位置（如只规划 XY，则把 z 置 0）
     Eigen::Vector3d robot_location = robot_location_now_;
     if (plan_xy_only_)
       robot_location(2) = 0.0;
 
-    // 3）在原始路径 globalpath_points 中找一个“离当前位置最近的点 b”，作为当前所在路径上的参考点
-    //寻找点b，并计算当前位置到b的直线距离ab
-    int b_index = 0;
-    double minDistance = std::numeric_limits<double>::infinity();
-    for (int i = 0; i < static_cast<int>(globalpath_points.size()); ++i)
-    {
-      double tempDistance = (globalpath_points[i] - robot_location).squaredNorm();  // 路径点与当前位置的平方距离，用于找最近点
-      if (tempDistance < minDistance)
-      {
-        minDistance = tempDistance;
-        b_index = i;
-      }
-    }
-    Eigen::Vector3d b = globalpath_points[b_index];
-
-    // 计算当前位置到 b 的直线距离 ab，用它来决定“向前再走多远找到点 c”
-    double ab = (b - robot_location).norm();
-
-    // 4）从 b 开始，沿着路径方向向前“累积路径弧长”，走大约 ab 的长度，找到路径上的点 c
-    Eigen::Vector3d cPointXyz = b;
-    int c_index = b_index; // c 所在的线段起点索引
-    if (ab > 0.1 && b_index < static_cast<int>(globalpath_points.size()) - 1)
-    {
-      double abRemain = ab;
-      Eigen::Vector3d currentPoint = b;
-      bool find_c = false;
-      for (int i = b_index; i < static_cast<int>(globalpath_points.size()) - 1; ++i)
-      {
-        Eigen::Vector3d nextPoint = globalpath_points[i + 1];
-        double twoPointDistance = (nextPoint - currentPoint).norm();
-        if (twoPointDistance < 1e-3)
-        {
-          currentPoint = nextPoint;
-          continue;
-        }
-        if (abRemain <= twoPointDistance)
-        {
-          //找到c点了，并记录c的索引
-          double ratio = abRemain / twoPointDistance;
-          cPointXyz = currentPoint + ratio * (nextPoint - currentPoint);
-          c_index = i;
-          find_c = true;
-          break;
-        }
-        else
-        {
-          abRemain -= twoPointDistance;
-          currentPoint = nextPoint;
-        }
-      }
-      // 如果到路径末尾都没走完 abRemain，就把 c 放在最后一个点
-      if (!find_c)
-      {
-        cPointXyz = globalpath_points.back();
-        c_index = static_cast<int>(globalpath_points.size()) - 2;
-      }
-    }
-
-    // 5）构造“从当前位置走到 c，再接上 c 之后尚未走完的整条路径”的未完成路径 pct_path_unfinished
     std::vector<Eigen::Vector3d> unfinished_points;
-    unfinished_points.reserve(static_cast<int>(ab/0.1)+globalpath_points.size()+1);
-
-    // 5.1）先在当前位置到 c 之间，每隔约 0.1m 取一个点；如果 ac 很短，则只取两端
-    Eigen::Vector3d ac_vector = cPointXyz - robot_location;
-    double ac_len = ac_vector.norm();
-    const double oneStepLength = 0.1; // 10cm 步长
-
-    unfinished_points.push_back(robot_location);
-    if (ac_len > 0.2)
-    {
-      int stepsNumber = static_cast<int>(std::floor(ac_len / oneStepLength));
-      Eigen::Vector3d ac_unitVector = ac_vector / ac_len;
-      for (int i = 1; i < stepsNumber; i++)
-      {
-        double tempDistance = i * oneStepLength;
-        unfinished_points.push_back(robot_location + tempDistance * ac_unitVector);
-      }
-    }
-    // 把 c 作为这一段的终点
-    unfinished_points.push_back(cPointXyz);
-
-    // 5.2）再把 c 之后的路径原样拼接上去（跳过 c 所在线段的起点，避免重复）
-    for (int i = c_index + 1; i < static_cast<int>(globalpath_points.size()); ++i)
-    {
-      unfinished_points.push_back(globalpath_points[i]);
-    }
-
-    // 5.3）发布 /pct_path_unfinished，方便 RViz 中查看“从当前位置开始还没走完的全局参考路径”
     nav_msgs::msg::Path unfinished_path;
-    unfinished_path.header = globalpath->header;
-    unfinished_path.poses.resize(unfinished_points.size());
-    for (size_t i = 0; i < unfinished_points.size(); ++i)
+    if (!buildUnfinishedFromGlobalPath(globalpath_points, robot_location, unfinished_points, &unfinished_path, &globalpath->header))
     {
-      auto &ps = unfinished_path.poses[i];
-      ps.header = globalpath->header;
-      ps.pose.position.x = unfinished_points[i].x();
-      ps.pose.position.y = unfinished_points[i].y();
-      ps.pose.position.z = unfinished_points[i].z();
-      // 姿态这里不做精细处理，简单置为单位四元数即可
-      ps.pose.orientation.x = 0.0;
-      ps.pose.orientation.y = 0.0;
-      ps.pose.orientation.z = 0.0;
-      ps.pose.orientation.w = 1.0;
+      return;
+    }
+    if (unfinished_points.size() < 2)
+    {
+      RCLCPP_WARN(node_->get_logger(), "buildUnfinishedFromGlobalPath produced too few points.");
+      return;
     }
     pct_path_unfinished_pub_->publish(unfinished_path);
 
@@ -1046,6 +1048,70 @@ namespace ego_planner
       t_cur = std::min(info->duration_, t_cur);
 
       Eigen::Vector3d pos = info->position_path_.evaluateDeBoorT(t_cur);
+
+      // USE_GLOBAL_PATH 向前推进：当前段剩余距离不足时，用 last_pct_path_ + 当前位置 重新取前 7m，补充到后面，再规划
+      const double roll_forward_thresh = 3.5;  // 剩余距离小于此值（米）时从 pct_path_unfinished 补充新段
+      if (target_type_ == TARGET_TYPE::USE_GLOBAL_PATH && have_pct_path_ && !last_pct_path_.poses.empty() &&
+          (end_pt_ - pos).norm() < roll_forward_thresh)
+      {
+        std::vector<Eigen::Vector3d> globalpath_points;
+        globalpath_points.reserve(last_pct_path_.poses.size());
+        for (const auto &ps : last_pct_path_.poses)
+        {
+          const auto &p = ps.pose.position;
+          Eigen::Vector3d pt(p.x, p.y, p.z);
+          if (plan_xy_only_)
+            pt(2) = 0.0;
+          globalpath_points.push_back(pt);
+        }
+        if (globalpath_points.size() >= 2)
+        {
+          Eigen::Vector3d robot_location = robot_location_now_;
+          if (plan_xy_only_)
+            robot_location(2) = 0.0;
+          std::vector<Eigen::Vector3d> unfinished_points;
+          nav_msgs::msg::Path unfinished_path;
+          if (buildUnfinishedFromGlobalPath(globalpath_points, robot_location, unfinished_points, &unfinished_path, &last_pct_path_.header) &&
+              unfinished_points.size() >= 2)
+          {
+            const double guide_len = 7.0;
+            pct_path_unfinished_pub_->publish(unfinished_path);
+
+            std::vector<Eigen::Vector3d> first_7m_pts;
+            double templength = 0.0;
+            for (size_t i = 1; i < unfinished_points.size(); ++i)
+            {
+              first_7m_pts.push_back(unfinished_points[i]);
+              templength += (unfinished_points[i] - unfinished_points[i - 1]).norm();
+              if (templength >= guide_len - 1e-3)
+                break;
+            }
+            guide_path_7m_withoutFirst5points_fsm_h_.clear();
+            if (first_7m_pts.size() > 5)
+              guide_path_7m_withoutFirst5points_fsm_h_.insert(guide_path_7m_withoutFirst5points_fsm_h_.end(), first_7m_pts.begin() + 5, first_7m_pts.end());
+
+            waypoint_index_now_ = 0;
+            const size_t max_wp = 200;
+            templength = 0.0;
+            for (size_t i = 1; i < unfinished_points.size() && waypoint_index_now_ < static_cast<int>(max_wp); ++i)
+            {
+              const Eigen::Vector3d &p = unfinished_points[i];
+              waypoints_array_[waypoint_index_now_][0] = p.x();
+              waypoints_array_[waypoint_index_now_][1] = p.y();
+              waypoints_array_[waypoint_index_now_][2] = plan_xy_only_ ? 0.0 : p.z();
+              waypoint_index_now_++;
+              templength += (unfinished_points[i] - unfinished_points[i - 1]).norm();
+              if (templength >= guide_len - 1e-3)
+                break;
+            }
+            if (waypoint_index_now_ > 0)
+            {
+              readGivenWps();
+              break;  // 本次已触发刷新与规划，下次周期再判
+            }
+          }
+        }
+      }
 
       /* && (end_pt_ - pos).norm() < 0.5 */
       if ((target_type_ == TARGET_TYPE::PRESET_TARGET || target_type_ == TARGET_TYPE::USE_GLOBAL_PATH) &&
