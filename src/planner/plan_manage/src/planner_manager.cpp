@@ -425,17 +425,15 @@ namespace ego_planner
   bool EGOPlannerManager::planGlobalPathWaypoints(const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
                                                   const std::vector<Eigen::Vector3d> &waypoints, const Eigen::Vector3d &end_vel, const Eigen::Vector3d &end_acc)
   {
-
-    // generate global reference trajectory
-
+    // ---------- 模块 1：构造完整路径点序列 points = [start_pos, waypoints[0], ...] ----------
     vector<Eigen::Vector3d> points;
     points.push_back(start_pos);
-
     for (size_t wp_i = 0; wp_i < waypoints.size(); wp_i++)
     {
       points.push_back(waypoints[wp_i]);
     }
 
+    // ---------- 模块 2：计算路径总弧长 total_len ----------
     double total_len = 0;
     total_len += (start_pos - waypoints[0]).norm();
     for (size_t i = 0; i < waypoints.size() - 1; i++)
@@ -443,55 +441,58 @@ namespace ego_planner
       total_len += (waypoints[i + 1] - waypoints[i]).norm();
     }
 
-    // insert intermediate points if too far
+    // ---------- 模块 3：相邻点过远时线性插中间点，得到 inter_points（阈值 = max(total_len/8, 4.0)） ----------
     vector<Eigen::Vector3d> inter_points;
+    // 距离阈值：取“路径总长/8”与 4.0m 的较大值，相邻点超过此距离则中间插点
     double dist_thresh = max(total_len / 8, 4.0);
-
     for (size_t i = 0; i < points.size() - 1; ++i)
     {
-      inter_points.push_back(points.at(i));
-      double dist = (points.at(i + 1) - points.at(i)).norm();
-
+      inter_points.push_back(points.at(i));  // 先加入当前段起点
+      double dist = (points.at(i + 1) - points.at(i)).norm();  // 当前段长度
       if (dist > dist_thresh)
       {
+        // 将当前段等分为 id_num 小段，在中间插入 (id_num - 1) 个插值点
         int id_num = floor(dist / dist_thresh) + 1;
-
         for (int j = 1; j < id_num; ++j)
         {
+          // 线性插值：inter_pt = (1 - j/id_num)*P_i + (j/id_num)*P_{i+1}
           Eigen::Vector3d inter_pt =
               points.at(i) * (1.0 - double(j) / id_num) + points.at(i + 1) * double(j) / id_num;
           inter_points.push_back(inter_pt);
         }
       }
     }
+    inter_points.push_back(points.back());  // 补上整条路径的终点
 
-    inter_points.push_back(points.back());
-
+    // ---------- 模块 4：将 inter_points 转为 3×N 矩阵 pos，并按 max_vel_ 估算每段飞行时间 time ----------
+    // 插值后路径点个数，pos 为 3×pt_num，第 i 列为第 i 个点的 xyz
     int pt_num = inter_points.size();
     Eigen::MatrixXd pos(3, pt_num);
     for (int i = 0; i < pt_num; ++i)
       pos.col(i) = inter_points[i];
-
-    Eigen::Vector3d zero(0, 0, 0);
+    // 每段飞行时间：段长/最大速度；共 pt_num-1 段，time(i) 表示从第 i 点到第 i+1 点的时间
     Eigen::VectorXd time(pt_num - 1);
     for (int i = 0; i < pt_num - 1; ++i)
     {
       time(i) = (pos.col(i + 1) - pos.col(i)).norm() / (pp_.max_vel_);
     }
-
+    // 首段、末段时间×2，给起飞和到达终点留余量
     time(0) *= 2.0;
     time(time.rows() - 1) *= 2.0;
 
+    // ---------- 模块 5：根据点数生成全局多项式路径（≥3 点 minSnap，2 点单段），并写入 global_data_ ----------
     PolynomialPath gl_path;
     if (pos.cols() >= 3)
+      // 多点：最小 snap 多项式拟合，满足起止速度/加速度约束及每段时间 time
       gl_path = PolynomialPath::minSnapPath(pos, start_vel, end_vel, start_acc, end_acc, time);
     else if (pos.cols() == 2)
+      // 仅起点与终点：单段多项式，从 start_pos 到 pos.col(1)，时长 time(0)
       gl_path = PolynomialPath::one_segment_path_gen(start_pos, start_vel, start_acc, pos.col(1), end_vel, end_acc, time(0));
     else
+      // 0 或 1 个点无法生成路径
       return false;
-
     auto time_now = rclcpp::Clock().now();
-
+    // 将生成的全局路径与当前时间写入 global_data_，供后续局部规划/轨迹跟踪使用
     global_data_.setGlobalPath(gl_path, time_now);
 
     return true;

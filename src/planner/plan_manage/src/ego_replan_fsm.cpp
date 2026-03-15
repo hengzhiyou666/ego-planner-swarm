@@ -317,7 +317,7 @@ namespace ego_planner
           new_wps.push_back(waypoints_array_xyz_[i]);
       }
       waypoints_array_xyz_ = new_wps;
-      waypoints_array_xyz_ = waypoints_array_xyz_;
+      waypoints_array_xyz_ = waypoints_array_xyz_;//heng20260315
       waypoint_index_now_ = (int)waypoints_array_xyz_.size();
       wp_id_ = 0;
 
