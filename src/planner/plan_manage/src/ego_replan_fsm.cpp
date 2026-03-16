@@ -962,6 +962,7 @@ namespace ego_planner
 
     switch (current_state_)
     {
+    //casecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecase
     // ----- 初始化：有里程计了就切到“等目标”，没有就啥也不干直接走人 -----
     case STATE_ONE__WAIT_FOR_ODOM:
     {
@@ -974,6 +975,7 @@ namespace ego_planner
       break;
     }
 
+    //casecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecase
     // ----- 等目标：还没收到目标或触发信号就 return；都有了就进“生成新路径”去算第一条轨迹 -----
     case WAIT_TARGET:
     {
@@ -989,6 +991,7 @@ namespace ego_planner
       break;
     }
 
+    //casecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecase
     // ----- 生成新路径：从当前位置算一条全新的全局+局部轨迹；成功就“执行”，失败且已经靠近终点就切下一路点或回“等目标” -----
     case GEN_NEW_PATH:
     {
@@ -1024,14 +1027,17 @@ namespace ego_planner
       break;
     }
 
+    //casecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecase
     // ----- 重规划：从当前轨迹上的“现在”位置再算一条新轨迹；成功就“执行”，失败且靠近终点就下一路点或回“等目标” -----
     case REPLAN_PATH:
     {
-      cout << "[当前在状态机里]当前状态是：REPLAN_PATH" << endl;
+      static string state_str[7] = {"STATE_ONE__WAIT_FOR_ODOM", "WAIT_TARGET", "GEN_NEW_PATH", "REPLAN_PATH", "EXEC_PATH", "EMERGENCY_STOP"};
+      cout << "[当前状态]: 当前状态是：" << state_str[int(current_state_)] << endl;
       // 从当前路径上的“现在”位置做一次局部重规划；参数 1 为 trial_times（失败时用 poly+rebound 最多重试 1 次）
       if (planFromCurrentPath(1))//规划局部路径
       {
         // 重规划成功：切到 EXEC_PATH 执行新轨迹，并发布本机轨迹给其他无人机
+        cout << "[状态切换]: 从 " << state_str[int(current_state_)] << " 转为 " << state_str[int(EXEC_PATH)] << endl;
         changeFSMExecState(EXEC_PATH, "FSM");
         publishSwarmPaths(false);
       }
@@ -1063,6 +1069,7 @@ namespace ego_planner
       break;
     }
 
+    //casecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecase
     // ----- 执行路径：看当前走到哪了；够时间/距离就触发“重规划”，快到终点或跑完就下一路点或回“等目标” -----
     case EXEC_PATH:
     {
@@ -1177,6 +1184,7 @@ namespace ego_planner
       break;
     }
 
+    //casecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecase
     // ----- 紧急停：先发一条“原地停”的轨迹；若开了 fail_safe 且速度下来了就尝试回到“生成新路径” -----
     case EMERGENCY_STOP:
     {

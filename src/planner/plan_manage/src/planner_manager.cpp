@@ -53,6 +53,7 @@ namespace ego_planner
                                         Eigen::Vector3d local_target_vel, bool flag_polyInit, bool flag_randomPolyTraj)
   {
     // ==================== 模块 0：入口与前置检查 ====================
+    rclcpp::Time t_plan7m_begin = rclcpp::Clock().now();
     static int count = 0;
     printf("\033[47;30m\n[robot replan 「核心算法」第%d次规划局部路径，开始规划...plan7mLocalPath（）]==============================================\033[0m\n", count++);
 
@@ -61,6 +62,7 @@ namespace ego_planner
     {
       cout << "到达目的地附近，reached the destination, distance_to_goal: " << distance_to_goal << endl;
       continous_failures_count_++;
+      printf("\033[42m[plan7mLocalPath] 执行耗时: %.3f ms\033[0m\n", (rclcpp::Clock().now() - t_plan7m_begin).seconds() * 1000.0);
       return false;
     }
 
@@ -212,6 +214,7 @@ namespace ego_planner
             {
               RCLCPP_ERROR(rclcpp::get_logger("ego_planner"), "pseudo_arc_length is empty, return!");
               continous_failures_count_++;
+              printf("\033[42m[plan7mLocalPath] 执行耗时: %.3f ms\033[0m\n", (rclcpp::Clock().now() - t_plan7m_begin).seconds() * 1000.0);
               return false;
             }
           }
@@ -268,6 +271,7 @@ namespace ego_planner
     bool flag_step_1_success = false;
     vector<vector<Eigen::Vector3d>> vis_paths;
 
+    // 若为 true：生成多条候选路径（distinctivePaths），逐条优化后选代价最低的一条；否则只优化单条路径
     if (pp_.try_more_paths_and_choose_best)
     {
       // cout << "enter" << endl;
@@ -321,6 +325,7 @@ namespace ego_planner
     {
       visualization_->displayOptimalList(ctrl_pts, 0);
       continous_failures_count_++;
+      printf("\033[42m[plan7mLocalPath] 执行耗时: %.3f ms\033[0m\n", (rclcpp::Clock().now() - t_plan7m_begin).seconds() * 1000.0);
       return false;
     }
 
@@ -350,6 +355,7 @@ namespace ego_planner
       {
         printf("\033[34mThis refined trajectory hits obstacles. It doesn't matter if appeares occasionally. But if continously appearing, Increase parameter \"lambda_fitness\".\n\033[0m");
         continous_failures_count_++;
+        printf("\033[42m[plan7mLocalPath] 执行耗时: %.3f ms\033[0m\n", (rclcpp::Clock().now() - t_plan7m_begin).seconds() * 1000.0);
         return false;
       }
     }
@@ -380,6 +386,7 @@ namespace ego_planner
 
     // success. YoY
     continous_failures_count_ = 0;
+    printf("\033[42m[plan7mLocalPath] 执行耗时: %.3f ms\033[0m\n", (rclcpp::Clock().now() - t_plan7m_begin).seconds() * 1000.0);
     return true;
   }
 
