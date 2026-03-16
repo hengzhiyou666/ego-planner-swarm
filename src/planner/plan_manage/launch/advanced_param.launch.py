@@ -194,10 +194,10 @@ parameters=[
             {'grid_map/map_size_z': map_size_z},             # 地图尺寸 Z 方向（m）
             {'grid_map/local_update_range_x': 5.5},          # 局部更新范围 X（m）
             {'grid_map/local_update_range_y': 5.5},          # 局部更新范围 Y（m）
-            {'grid_map/local_update_range_z': 0.5},          # 局部更新范围 Z（m）
+            {'grid_map/local_update_range_z': 1.5},          # 局部更新范围 Z（m）
             {'grid_map/obstacles_inflation': 0.099},         # 障碍膨胀半径，太大容易将机器人包进障碍中
             {'grid_map/local_map_margin': 10},               # 栅格边界预留 margin（格数）
-            {'grid_map/ground_height': -0.2},                # 地面高度 z 值（以下视为地面/不可行）
+            {'grid_map/ground_height': 0.2},                # 地面高度 z 值（以下视为地面/不可行）
             {'grid_map/use_depth_for_occupancy': False},      # False=仅点云 /lidar_points 避障；True=深度图+点云共同更新占据
 
             # ========== 三、相机内参（用于深度/点云投影） ==========
@@ -225,7 +225,7 @@ parameters=[
             {'grid_map/max_ray_length': 4.5},                # 射线最大长度（m）
 
             # ========== 六、可视化 & 坐标系设置 ==========
-            {'grid_map/virtual_ceil_height': 1.5},           # 虚拟天花板高度（m），限制飞行高度
+            {'grid_map/virtual_ceil_height': 1.0},           # 虚拟天花板高度（m），限制飞行高度
             {'grid_map/visualization_truncate_height': 2.5}, # 原为1.8，可视化截断显示高度
             {'grid_map/show_occ_time': False},               # 是否显示每个栅格的更新时间
             # 是否发布占据栅格（及膨胀后栅格）的点云，用于 RViz 实时显示
