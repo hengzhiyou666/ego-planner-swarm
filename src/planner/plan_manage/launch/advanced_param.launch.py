@@ -8,6 +8,8 @@ def generate_launch_description():
 
     #======================告诉系统我要使用哪些变量，默认值是多少=================================================================
     # LaunchConfigurations
+    # 是否实时显示占据栅格地图（1/0 通过 launch 传入，这里用 bool 表示）
+    enable_realtime_occupancy_grid = LaunchConfiguration('enable_realtime_occupancy_grid', default=True)
     map_size_x = LaunchConfiguration('map_size_x_', default=42.0)
     map_size_y = LaunchConfiguration('map_size_y_', default=30.0)
     map_size_z = LaunchConfiguration('map_size_z_', default=5.0)
@@ -17,7 +19,8 @@ def generate_launch_description():
     depth_topic = LaunchConfiguration('depth_topic', default='depth')
     cloud_topic = LaunchConfiguration('cloud_topic', default='lidar_points')
 
-    frame_id = LaunchConfiguration('frame_id', default='odom')
+    # 统一使用 head_init 作为规划/地图坐标系，便于直接在 RViz 中作为 Fixed Frame 使用
+    frame_id = LaunchConfiguration('frame_id', default='head_init')
     
     cx = LaunchConfiguration('cx', default=321.04638671875)
     cy = LaunchConfiguration('cy', default=243.44969177246094)
@@ -61,6 +64,10 @@ def generate_launch_description():
 
     #=======================================================================================
     # DeclareLaunchArguments
+    enable_realtime_occupancy_grid_arg = DeclareLaunchArgument(
+        'enable_realtime_occupancy_grid',
+        default_value=enable_realtime_occupancy_grid,
+        description='Whether to publish occupancy grid pointcloud for realtime visualization')
     map_size_x_arg = DeclareLaunchArgument('map_size_x_', default_value=map_size_x, description='Map size along X')
     map_size_y_arg = DeclareLaunchArgument('map_size_y_', default_value=map_size_y, description='Map size along Y')
     map_size_z_arg = DeclareLaunchArgument('map_size_z_', default_value=map_size_z, description='Map size along Z')
@@ -221,6 +228,8 @@ parameters=[
             {'grid_map/virtual_ceil_height': 2.9},           # 虚拟天花板高度（m），限制飞行高度
             {'grid_map/visualization_truncate_height': 2.5}, # 原为1.8，可视化截断显示高度
             {'grid_map/show_occ_time': False},               # 是否显示每个栅格的更新时间
+            # 是否发布占据栅格（及膨胀后栅格）的点云，用于 RViz 实时显示
+            {'grid_map/enable_realtime_occupancy_vis': enable_realtime_occupancy_grid},
             {'grid_map/input_pose_message_type': input_pose_message_type},  # 输入位姿消息类型（1=PoseStamped,2=Odometry）
             {'grid_map/frame_id': frame_id},                 # 地图/规划坐标系（如 odom/map）
 
@@ -261,6 +270,7 @@ parameters=[
     # Create LaunchDescription（启动计划本）
     launch_plan = LaunchDescription()
 
+    launch_plan.add_action(enable_realtime_occupancy_grid_arg)
     launch_plan.add_action(map_size_x_arg)
     launch_plan.add_action(map_size_y_arg)
     launch_plan.add_action(map_size_z_arg)

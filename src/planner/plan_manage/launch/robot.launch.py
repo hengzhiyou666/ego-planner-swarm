@@ -23,7 +23,7 @@ def generate_launch_description():
     map_size_z = LaunchConfiguration('map_size_z', default=10.0)  # 原为2.0
     # 调试模式：沿全局路径仅向前走指定米数；-1.0 表示关闭调试，正常使用完整 /pct_path
     # 使用浮点数以匹配节点中参数类型（double）
-    debugMode_testGoForward_m = LaunchConfiguration('debugMode_testGoForward_m', default='10.0')
+    debugMode_testGoForward_m = LaunchConfiguration('debugMode_testGoForward_m', default='-1.0')
 
     # ----- 真实机器狗开关（本工程清理后仅支持 True；保留参数避免用户脚本报错） -----
     use_real_robot = LaunchConfiguration('use_real_robot', default=True)
@@ -35,7 +35,10 @@ def generate_launch_description():
     camera_pose_topic = LaunchConfiguration('camera_pose_topic', default='/camera_pose')
     # 同时输入 depth + pose + cloud：depth 与 pose 做时间同步，cloud 独立订阅
     input_pose_message_type = LaunchConfiguration('input_pose_message_type', default=1)
-    frame_id = LaunchConfiguration('frame_id', default='odom')
+    # 默认与 RViz 配置保持一致，使用 head_init 作为全局 / 地图坐标系
+    frame_id = LaunchConfiguration('frame_id', default='head_init')
+    # 是否实时显示占据栅格地图（1=显示，0=不显示；内部作为 bool 使用）
+    enable_realtime_occupancy_grid = LaunchConfiguration('enable_realtime_occupancy_grid', default='1')
     # 是否自动启动 RViz（Fixed Frame: head_init；话题：/pct_path_unfinished, /odometry, /drone_0_plan_vis/optimal_list, /drone_0_plan_vis/goal_point）
     rviz = LaunchConfiguration('rviz', default='true')
     # pct_path 判重：True=与上次路径相同时跳过计算；False=不检测，每次都执行
@@ -73,6 +76,10 @@ def generate_launch_description():
                                         description='grid_map 输入位姿话题消息类型: 1=PoseStamped, 2=Odometry'))
     launch_plan.add_action(DeclareLaunchArgument('frame_id', default_value=frame_id,
                                         description='Planning/map frame id (odom/map)'))
+    launch_plan.add_action(DeclareLaunchArgument(
+        'enable_realtime_occupancy_grid',
+        default_value=enable_realtime_occupancy_grid,
+        description='Whether to publish occupancy grid pointcloud in realtime (1=on,0=off)'))
     launch_plan.add_action(DeclareLaunchArgument('cx', default_value=cx, description='Camera intrinsic cx'))
     launch_plan.add_action(DeclareLaunchArgument('cy', default_value=cy, description='Camera intrinsic cy'))
     launch_plan.add_action(DeclareLaunchArgument('fx', default_value=fx, description='Camera intrinsic fx'))
@@ -106,6 +113,7 @@ def generate_launch_description():
             'frame_id': frame_id,
             'pct_path_skip_if_same': pct_path_skip_if_same,
             'debugMode_testGoForward_m': debugMode_testGoForward_m,
+            'enable_realtime_occupancy_grid': enable_realtime_occupancy_grid,
 
             #规划器参数：不可从外部输入的，该处写好后固定的参数
             'max_vel': '2.0',  # 规划器允许的最大速度（单位：m/s）

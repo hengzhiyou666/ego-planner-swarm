@@ -87,6 +87,8 @@ struct MappingParameters
   /* visualization and computation time display */
   double visualization_truncate_height_, virtual_ceil_height_, ground_height_, virtual_ceil_yp_, virtual_ceil_yn_;
   bool show_occ_time_;
+  /** 是否发布占据栅格点云用于实时可视化（由 launch 参数控制） */
+  bool enable_realtime_occupancy_vis_;
 
   /* active mapping */
   double unknown_flag_;

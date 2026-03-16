@@ -45,6 +45,8 @@ void GridMap::initMap(rclcpp::Node::SharedPtr node)
   node_->declare_parameter("grid_map/virtual_ceil_yp", -0.1);
   node_->declare_parameter("grid_map/virtual_ceil_yn", -0.1);
   node_->declare_parameter("grid_map/show_occ_time", false);
+  // 这里用 int 来兼容 launch 中传入的 0/1，再在代码里转换为 bool
+  node_->declare_parameter("grid_map/enable_realtime_occupancy_vis", 1);
   node_->declare_parameter("grid_map/input_pose_message_type", 1);
   node_->declare_parameter("grid_map/frame_id", "world");
   node_->declare_parameter("grid_map/local_map_margin", 1);
@@ -83,6 +85,12 @@ void GridMap::initMap(rclcpp::Node::SharedPtr node)
   node_->get_parameter("grid_map/virtual_ceil_yp", mp_.virtual_ceil_yp_);
   node_->get_parameter("grid_map/virtual_ceil_yn", mp_.virtual_ceil_yn_);
   node_->get_parameter("grid_map/show_occ_time", mp_.show_occ_time_);
+  {
+    // 允许通过 0/1 来控制是否发布占据栅格可视化
+    int vis_flag = 1;
+    node_->get_parameter("grid_map/enable_realtime_occupancy_vis", vis_flag);
+    mp_.enable_realtime_occupancy_vis_ = (vis_flag != 0);
+  }
   node_->get_parameter("grid_map/input_pose_message_type", mp_.input_pose_message_type_);
   node_->get_parameter("grid_map/frame_id", mp_.frame_id_);
   node_->get_parameter("grid_map/local_map_margin", mp_.local_map_margin_);
@@ -712,6 +720,11 @@ void GridMap::clearAndInflateLocalMap()
 
 void GridMap::visCallback()
 {
+  // 由参数控制是否发布占据栅格点云，可在 launch 中通过 enable_realtime_occupancy_grid 开关
+  if (!mp_.enable_realtime_occupancy_vis_)
+  {
+    return;
+  }
   publishMapInflate(true);
   publishMap();
 }
