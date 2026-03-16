@@ -21,6 +21,7 @@ def generate_launch_description():
     map_size_x = LaunchConfiguration('map_size_x', default=90.0)  # 原为50.0
     map_size_y = LaunchConfiguration('map_size_y', default=130.0)  # 原为25.0
     map_size_z = LaunchConfiguration('map_size_z', default=10.0)  # 原为2.0
+
     # 调试模式：沿全局路径仅向前走指定米数；-1.0 表示关闭调试，正常使用完整 /pct_path
     # 使用浮点数以匹配节点中参数类型（double）
     debugMode_testGoForward_m = LaunchConfiguration('debugMode_testGoForward_m', default='-1.0')
@@ -117,11 +118,11 @@ def generate_launch_description():
 
             #规划器参数：不可从外部输入的，该处写好后固定的参数
             'max_vel': '2.0',  # 规划器允许的最大速度（单位：m/s）
-            'max_acc': '6.0',  # 规划器允许的最大加速度（单位：m/s^2）
+            'max_acc': '1.0',  # 规划器允许的最大加速度（单位：m/s^2）
             'path_ahead_time': '7.5',  # 规划时间范围，向前看多长时间（单位：秒）
             'try_more_paths_and_choose_best': 'True',  # 是否“多算几条不同路径再从中挑一条最优路径”
             'egoplanner_input_point_or_path': '3',  # EGO Planner 输入是“单点 / 预设点 / 参考路径”等模式开关
-            'plan_xy_only': 'True',#是否只规划XY平面，不规划Z轴（True：只规划XY平面2维路径，False：规划XYZ 3维路径）
+            'plan_xy_only': 'False',#是否只规划XY平面，不规划Z轴（True：只规划XY平面2维路径，False：规划XYZ 3维路径）
             'point_num': '4',
             'point0_x': '31.2', 'point0_y': '-6.4', 'point0_z': '1.9',
             'point1_x': '33.0', 'point1_y': '-2.5', 'point1_z': '1.9',
