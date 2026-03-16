@@ -49,7 +49,9 @@ def generate_launch_description():
     try_more_paths_and_choose_best = LaunchConfiguration('try_more_paths_and_choose_best', default=True)
     plan_xy_only = LaunchConfiguration('plan_xy_only', default=True)
     pct_path_skip_if_same = LaunchConfiguration('pct_path_skip_if_same', default=False)  # True：与上次路径相同时跳过计算；False：不判重，每次都执行
-    
+    # Debug 前进测试模式：>0 表示从 /pct_path 起点向前截取指定米数；-1 关闭该模式（默认 10m）
+    debugMode_testGoForward_m = LaunchConfiguration('debugMode_testGoForward_m', default=10.0)
+
     num_of_dynamic_objects = LaunchConfiguration('num_of_dynamic_objects', default=10)
     
     drone_id = LaunchConfiguration('drone_id', default=0)
@@ -105,6 +107,10 @@ def generate_launch_description():
         'pct_path_skip_if_same',
         default_value=pct_path_skip_if_same,
         description='True: skip computation when /pct_path same as last; False: no check, always execute')
+    debugMode_testGoForward_m_arg = DeclareLaunchArgument(
+        'debugMode_testGoForward_m',
+        default_value=debugMode_testGoForward_m,
+        description='Debug 前进测试：>0 从 /pct_path 起点向前截取指定米数；-1 关闭')
     num_of_dynamic_objects_arg = DeclareLaunchArgument(
         'num_of_dynamic_objects',
         default_value=num_of_dynamic_objects,
@@ -154,6 +160,7 @@ parameters=[
             {'fsm/fail_safe': True},                         # 是否启用失败保护（规划失败时进入 EMERGENCY_STOP 等）
             {'fsm/plan_xy_only': plan_xy_only},              # 只在 XY 平面规划（机器狗等地面机器人）
             {'fsm/pct_path_skip_if_same': pct_path_skip_if_same},  # True：与上次路径相同时跳过计算；False：不判重，每次都执行
+            {'fsm/debugMode_testGoForward_m': debugMode_testGoForward_m},  # Debug 前进测试模式：从 /pct_path 起点向前截取多少米
 
             # 预设航路点（当目标模式为 PRESET_TARGET 时使用）
             {'fsm/waypoint_num': point_num},                 # 航路点数量
@@ -291,6 +298,7 @@ parameters=[
     launch_plan.add_action(try_more_paths_and_choose_best_arg)
     launch_plan.add_action(plan_xy_only_arg)
     launch_plan.add_action(pct_path_skip_if_same_arg)
+    launch_plan.add_action(debugMode_testGoForward_m_arg)
     launch_plan.add_action(num_of_dynamic_objects_arg)
     launch_plan.add_action(drone_id_arg)
     launch_plan.add_action(input_pose_message_type_arg)

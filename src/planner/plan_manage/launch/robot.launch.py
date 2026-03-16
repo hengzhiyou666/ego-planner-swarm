@@ -21,6 +21,9 @@ def generate_launch_description():
     map_size_x = LaunchConfiguration('map_size_x', default=90.0)  # 原为50.0
     map_size_y = LaunchConfiguration('map_size_y', default=130.0)  # 原为25.0
     map_size_z = LaunchConfiguration('map_size_z', default=10.0)  # 原为2.0
+    # 调试模式：沿全局路径仅向前走指定米数；-1.0 表示关闭调试，正常使用完整 /pct_path
+    # 使用浮点数以匹配节点中参数类型（double）
+    debugMode_testGoForward_m = LaunchConfiguration('debugMode_testGoForward_m', default='10.0')
 
     # ----- 真实机器狗开关（本工程清理后仅支持 True；保留参数避免用户脚本报错） -----
     use_real_robot = LaunchConfiguration('use_real_robot', default=True)
@@ -51,6 +54,11 @@ def generate_launch_description():
     launch_plan.add_action(DeclareLaunchArgument('map_size_x', default_value=map_size_x, description='Map size X (m)'))
     launch_plan.add_action(DeclareLaunchArgument('map_size_y', default_value=map_size_y, description='Map size Y (m)'))
     launch_plan.add_action(DeclareLaunchArgument('map_size_z', default_value=map_size_z, description='Map size Z (m)'))
+    launch_plan.add_action(DeclareLaunchArgument(
+        'debugMode_testGoForward_m',
+        default_value=debugMode_testGoForward_m,
+        description='调试模式：>0 仅使用从起点向前指定米数的 /pct_path；-1.0 关闭调试，使用完整全局路径（类型为 double）'
+    ))
     launch_plan.add_action(DeclareLaunchArgument('use_real_robot', default_value=use_real_robot,
                                         description='True: no map gen, no simulator; use robot topics'))
     launch_plan.add_action(DeclareLaunchArgument('odometry_topic', default_value=odometry_topic,
@@ -97,6 +105,7 @@ def generate_launch_description():
             'input_pose_message_type': input_pose_message_type,
             'frame_id': frame_id,
             'pct_path_skip_if_same': pct_path_skip_if_same,
+            'debugMode_testGoForward_m': debugMode_testGoForward_m,
 
             #规划器参数：不可从外部输入的，该处写好后固定的参数
             'max_vel': '2.0',  # 规划器允许的最大速度（单位：m/s）

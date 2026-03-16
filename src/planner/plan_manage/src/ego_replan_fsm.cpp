@@ -32,7 +32,7 @@ namespace ego_planner
     node_->declare_parameter("fsm/fail_safe", true);
     node_->declare_parameter("fsm/plan_xy_only", false);
     node_->declare_parameter("fsm/pct_path_skip_if_same", false);  // 默认不判重，与 robot.launch 一致
-
+    node_->declare_parameter("fsm/debugMode_testGoForward_m", 10.0); // Debug 前进测试模式：从 /pct_path 起点向前截取多少米，-1 表示关闭
     node_->get_parameter("fsm/egoplanner_input_point_or_path", target_type_);
     node_->get_parameter("fsm/thresh_replan_time", replan_thresh_);
     node_->get_parameter("fsm/thresh_no_replan_meter", no_replan_thresh_);
@@ -42,6 +42,7 @@ namespace ego_planner
     node_->get_parameter("fsm/realworld_experiment", flag_realworld_experiment_);
     node_->get_parameter("fsm/fail_safe", enable_fail_safe_);
     node_->get_parameter("fsm/plan_xy_only", plan_xy_only_);
+    node_->get_parameter("fsm/debugMode_testGoForward_m", debugMode_testGoForward_m_);
     // launch 传入的布尔常为字符串 "True"/"False"，需兼容解析
     {
       auto p = node_->get_parameter("fsm/pct_path_skip_if_same");
@@ -516,9 +517,6 @@ namespace ego_planner
     return true;
   }
 
-  // /pct_path 话题回调：
-  // 1）接收外部给的一整条“全局参考路径”（密集点，不再做稀疏采样）；
-  // 2）与上次路径相同则直接退出不计算；不同则结合当前位置构造未走完路径并发布、取前 7m 引导并触发规划。
   void classEGOPlannerStateMachine::pctPathCallback(const std::shared_ptr<const nav_msgs::msg::Path> &globalpath)
   {
     cout << "检测到有新的/pct_path话题被发布，进入pctPathCallback()回调函数" << endl;
@@ -529,33 +527,91 @@ namespace ego_planner
       return;
     }
 
-    // 1）安全性检查：如果消息里一个点都没有，直接忽略，不进行后续处理
-    if (globalpath->poses.empty())
+    // 1）先拷贝一份路径，方便在 Debug 模式下对其进行截断等操作
+    nav_msgs::msg::Path current_path = *globalpath;
+
+    // 1.1）安全性检查：如果消息里一个点都没有，直接忽略，不进行后续处理
+    if (current_path.poses.empty())
     {
       RCLCPP_WARN(node_->get_logger(), "we have got globalpath, but it is empty!!! so we ignore it,return now.");
       return;
     }
     if (pct_path_skip_if_same_)
     {
-      cout << "pct_path_skip_if_same_为True=================================================" << endl;
+      cout << "进行全局路径重复检查，pct_path_skip_if_same_为True=================================================" << endl;
     }
     else
     {
-      cout << "pct_path_skip_if_same_为False=================================================" << endl;
+      cout << "不进行全局路径重复检查，pct_path_skip_if_same_为False=================================================" << endl;
     }
+    // 1.2）Debug 前进测试模式：从起点开始只保留前 debugMode_testGoForward_m_ 米
+    if (debugMode_testGoForward_m_ > 0.0 && current_path.poses.size() >= 2)
+    {
+      const double deubgLength10m = debugMode_testGoForward_m_;
+      nav_msgs::msg::Path truncated;
+      truncated.header = current_path.header;
+      truncated.poses.clear();
+      truncated.poses.reserve(current_path.poses.size());
+
+      truncated.poses.push_back(current_path.poses.front());
+      double totalLength = 0.0;
+
+      for (size_t i = 1; i < current_path.poses.size(); ++i)
+      {
+        const auto &prev = current_path.poses[i - 1].pose.position;
+        const auto &curr = current_path.poses[i].pose.position;
+        const double dx = curr.x - prev.x;
+        const double dy = curr.y - prev.y;
+        const double dz = curr.z - prev.z;
+        const double twoPointTempLength = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+        if (twoPointTempLength < 1e-6)
+          continue;
+
+        if (totalLength + twoPointTempLength <= deubgLength10m + 1e-3)
+        {
+          truncated.poses.push_back(current_path.poses[i]);
+          totalLength += twoPointTempLength;
+          if (totalLength >= deubgLength10m - 1e-3)
+            break;
+        }
+        else
+        {
+          // 在当前段内插值得到恰好 deubgLength10m 处的点
+          const double remain = deubgLength10m - totalLength;
+          if (remain > 0.0)
+          {
+            const double ratio = remain / twoPointTempLength;
+            geometry_msgs::msg::PoseStamped interp = current_path.poses[i - 1];
+            interp.pose.position.x = prev.x + ratio * dx;
+            interp.pose.position.y = prev.y + ratio * dy;
+            interp.pose.position.z = prev.z + ratio * dz;
+            truncated.poses.push_back(interp);
+          }
+          break;
+        }
+      }
+
+      // 如果整个路径长度都小于 target_len，就保持原路径不变；否则用截断后的路径
+      if (truncated.poses.size() >= 2)
+      {
+        current_path = std::move(truncated);
+      }
+    }
+
     // 1.5）路径判重（可由参数关闭）：与上一帧路径相同则直接退出，不重复计算
     if (pct_path_skip_if_same_)
     {
       constexpr double kPathCompareTol = 1e-6;
       if (!last_pct_path_.poses.empty() &&
-          last_pct_path_.header.frame_id == globalpath->header.frame_id &&
-          last_pct_path_.poses.size() == globalpath->poses.size())
+          last_pct_path_.header.frame_id == current_path.header.frame_id &&
+          last_pct_path_.poses.size() == current_path.poses.size())
       {
         bool same = true;
-        for (size_t i = 0; i < globalpath->poses.size(); ++i)
+        for (size_t i = 0; i < current_path.poses.size(); ++i)
         {
           const auto &a = last_pct_path_.poses[i].pose.position;
-          const auto &b = globalpath->poses[i].pose.position;
+          const auto &b = current_path.poses[i].pose.position;
           if (std::abs(a.x - b.x) > kPathCompareTol || std::abs(a.y - b.y) > kPathCompareTol || std::abs(a.z - b.z) > kPathCompareTol)
           {
             same = false;
@@ -570,10 +626,10 @@ namespace ego_planner
       }
     }
 
-    // 2）把 /pct_path 转成 Eigen 点列，并得到“未走完路径” unfinished_points
+    // 2）把（可能已经被 Debug 截断后的）/pct_path 转成 Eigen 点列，并得到“未走完路径” unfinished_points
     std::vector<Eigen::Vector3d> globalpath_points;
-    globalpath_points.reserve(globalpath->poses.size());
-    for (const auto &ps : globalpath->poses)
+    globalpath_points.reserve(current_path.poses.size());
+    for (const auto &ps : current_path.poses)
     {
       const auto &p = ps.pose.position;
       Eigen::Vector3d pt(p.x, p.y, p.z);
@@ -592,7 +648,7 @@ namespace ego_planner
 
     std::vector<Eigen::Vector3d> unfinished_points;
     nav_msgs::msg::Path unfinished_path;
-    if (!buildUnfinishedFromGlobalPath(globalpath_points, robot_location, unfinished_points, &unfinished_path, &globalpath->header))
+    if (!buildUnfinishedFromGlobalPath(globalpath_points, robot_location, unfinished_points, &unfinished_path, &current_path.header))
     {
       return;
     }
@@ -658,8 +714,8 @@ namespace ego_planner
     // 8）把采样好的 waypoints_array_ 转换成内部的 waypoints_array_xyz_ 向量，并调用原有多路点规划逻辑
     readGivenWps();
 
-    // 保存当前路径，供下次回调判重
-    last_pct_path_ = *globalpath;
+    // 保存当前路径（已考虑 Debug 截断），供下次回调判重
+    last_pct_path_ = current_path;
   }
 
   void classEGOPlannerStateMachine::planNextWaypoint(const Eigen::Vector3d next_wp)
