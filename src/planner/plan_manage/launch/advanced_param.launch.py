@@ -238,7 +238,7 @@ parameters=[
             {'manager/max_vel': max_vel},               # 规划器允许的最大速度（m/s）
             {'manager/max_acc': max_acc},               # 规划器允许的最大加速度（m/s^2）
             {'manager/max_jerk': 4.0},                  # 允许的最大 jerk（加加速度），越大轨迹越“硬”
-            {'manager/control_points_distance': 0.4},   # 相邻控制点之间的期望间距（m），影响轨迹细腻程度
+            {'manager/control_points_distance': 0.1},   # 相邻控制点之间的期望间距（m），影响轨迹细腻程度
             {'manager/feasibility_tolerance': 0.05},    # 可行性检查容差，略微放宽速度/加速度约束
             {'manager/path_ahead_time': path_ahead_time},  # 规划向前看的时间范围（s），影响局部目标位置
             {'manager/try_more_paths_and_choose_best': try_more_paths_and_choose_best},  # 是否尝试多条初始路径并选择代价最小的一条
