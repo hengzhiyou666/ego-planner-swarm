@@ -400,10 +400,13 @@ namespace ego_planner
         }
         visualization_->displayGlobalPathList(global_path, 0.1, 0);
 
-        if (current_state_ == WAIT_TARGET)
-          changeFSMExecState(GEN_NEW_PATH, "TRIG");
+        // 首次收到全局路径且当前还在“等待里程计”或“等待目标”阶段时，应该先进入 GEN_NEW_PATH，
+        // 生成第一条局部轨迹，再由 EXEC_PATH 驱动后续 REPLAN_PATH；
+        // 否则可能在还没有任何 local_data_ 轨迹的情况下直接进入 REPLAN_PATH，导致 planFromCurrentPath 访问未初始化数据而段错误。
+        if (current_state_ == WAIT_TARGET || current_state_ == STATE_ONE__WAIT_FOR_ODOM)
+          changeStateTo(GEN_NEW_PATH, "TRIG");
         else
-          changeFSMExecState(REPLAN_PATH, "TRIG");
+          changeStateTo(REPLAN_PATH, "TRIG");
         return;
       }
       // 全路径规划失败时退化为只规划到第一个路点（落到下方“单路点/非 USE_GLOBAL_PATH”逻辑）
@@ -746,11 +749,11 @@ namespace ego_planner
 
       /*** FSM状态转换 ***/
       if (current_state_ == WAIT_TARGET)
-        changeFSMExecState(GEN_NEW_PATH, "TRIG");
+        changeStateTo(GEN_NEW_PATH, "TRIG");
       else
       {
         /* 已在 executor 内，不再阻塞 spin_some，避免 "Node has already been added to an executor" */
-        changeFSMExecState(REPLAN_PATH, "TRIG");
+        changeStateTo(REPLAN_PATH, "TRIG");
       }
 
       visualization_->displayGlobalPathList(global_path, 0.1, 0);
@@ -884,7 +887,7 @@ namespace ego_planner
     /* Check Collision */
     if (planner_manager_->checkCollision(id))
     {
-      changeFSMExecState(REPLAN_PATH, "TRAJ_CHECK");
+      changeStateTo(REPLAN_PATH, "TRAJ_CHECK");
     }
   }
 
@@ -971,7 +974,7 @@ namespace ego_planner
     have_recv_pre_agent_ = true;
   }
 
-  void classEGOPlannerStateMachine::changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call)
+  void classEGOPlannerStateMachine::changeStateTo(FSM_EXEC_STATE new_state, string pos_call)
   {
 
     if (new_state == current_state_)
@@ -1027,7 +1030,7 @@ namespace ego_planner
       {
         goto force_return;
       }
-      changeFSMExecState(WAIT_TARGET, "FSM");
+      changeStateTo(WAIT_TARGET, "FSM");
       break;
     }
 
@@ -1038,7 +1041,7 @@ namespace ego_planner
       cout << "[当前在状态机里]当前状态是：WAIT_TARGET" << endl;
       if (have_target_ && have_trigger_)
       {
-        changeFSMExecState(GEN_NEW_PATH, "FSM");
+        changeStateTo(GEN_NEW_PATH, "FSM");
       }
       else
       {
@@ -1055,7 +1058,7 @@ namespace ego_planner
       bool success = planFromGlobalPath(10); // 从当前 odom 算一条新路径，最多试 10 次
       if (success)
       {
-        changeFSMExecState(EXEC_PATH, "FSM"); // 成功则进入“执行”
+        changeStateTo(EXEC_PATH, "FSM"); // 成功则进入“执行”
         flag_escape_emergency_ = true;
         publishSwarmPaths(false);
       }
@@ -1074,11 +1077,11 @@ namespace ego_planner
           {
             have_target_ = false;           // 已是最后一个路点：清目标与触发，回“等目标”
             have_trigger_ = false;
-            changeFSMExecState(WAIT_TARGET, "FSM");
+            changeStateTo(WAIT_TARGET, "FSM");
           }
         }
         else
-          changeFSMExecState(GEN_NEW_PATH, "FSM"); // 否则继续留在本状态，下次再试
+          changeStateTo(GEN_NEW_PATH, "FSM"); // 否则继续留在本状态，下次再试
       }
       break;
     }
@@ -1094,7 +1097,7 @@ namespace ego_planner
       {
         // 重规划成功：切到 EXEC_PATH 执行新轨迹，并发布本机轨迹给其他无人机
         cout << "[状态切换]: 从 " << state_str[int(current_state_)] << " 转为 " << state_str[int(EXEC_PATH)] << endl;
-        changeFSMExecState(EXEC_PATH, "FSM");
+        changeStateTo(EXEC_PATH, "FSM");
         publishSwarmPaths(false);
       }
       else
@@ -1114,12 +1117,12 @@ namespace ego_planner
             // 已是最后一个路点：清空目标与触发，回到 WAIT_TARGET 等待新目标
             have_target_ = false;
             have_trigger_ = false;
-            changeFSMExecState(WAIT_TARGET, "FSM");
+            changeStateTo(WAIT_TARGET, "FSM");
           }
         }
         else
           // 未靠近终点或非多路点模式：保持 REPLAN_PATH，下次 10ms 再试
-          changeFSMExecState(REPLAN_PATH, "FSM");
+          changeStateTo(REPLAN_PATH, "FSM");
       }
 
       break;
@@ -1224,17 +1227,17 @@ namespace ego_planner
           }
           /* USE_GLOBAL_PATH: 跑完当前路径后进入 WAIT_TARGET，等待新 /pct_path，不自动循环 */
 
-          changeFSMExecState(WAIT_TARGET, "FSM");
+          changeStateTo(WAIT_TARGET, "FSM");
           goto force_return;
         }
         else if ((end_pt_ - pos).norm() > no_replan_thresh_ && t_cur > replan_thresh_)
         {
-          changeFSMExecState(REPLAN_PATH, "FSM");
+          changeStateTo(REPLAN_PATH, "FSM");
         }
       }
       else if (t_cur > replan_thresh_)
       {
-        changeFSMExecState(REPLAN_PATH, "FSM");
+        changeStateTo(REPLAN_PATH, "FSM");
       }
 
       break;
@@ -1252,7 +1255,7 @@ namespace ego_planner
       else
       {
         if (enable_fail_safe_ && robot_vel_now_fromOdomDirectly_.norm() < 0.1)
-          changeFSMExecState(GEN_NEW_PATH, "FSM");
+          changeStateTo(GEN_NEW_PATH, "FSM");
       }
 
       flag_escape_emergency_ = false;
@@ -1386,7 +1389,7 @@ namespace ego_planner
     {
       RCLCPP_ERROR(node_->get_logger(), "Depth Lost! EMERGENCY_STOP");
       enable_fail_safe_ = false;
-      changeFSMExecState(EMERGENCY_STOP, "SAFETY");
+      changeStateTo(EMERGENCY_STOP, "SAFETY");
     }
 
     // ---------- 若地图自上次检查以来完全未更新，在当前 EXEC_PATH 下直接沿用原局部路径，不做重新碰撞检测 ----------
@@ -1437,7 +1440,7 @@ namespace ego_planner
         // 发现碰撞：先尝试从当前轨迹起点重规划一条新路径
         if (planFromCurrentPath())
         {
-          changeFSMExecState(EXEC_PATH, "SAFETY");
+          changeStateTo(EXEC_PATH, "SAFETY");
           publishSwarmPaths(false);
           return;
         }
@@ -1445,12 +1448,12 @@ namespace ego_planner
         if (t - t_cur < emergency_time_)
         {
           RCLCPP_WARN(node_->get_logger(), "Suddenly discovered obstacles. emergency stop! time=%f", t - t_cur);
-          changeFSMExecState(EMERGENCY_STOP, "SAFETY");
+          changeStateTo(EMERGENCY_STOP, "SAFETY");
         }
         else
         {
           RCLCPP_WARN(node_->get_logger(), "current path in collision, replan.");
-          changeFSMExecState(REPLAN_PATH, "SAFETY");
+          changeStateTo(REPLAN_PATH, "SAFETY");
         }
         return;
       }

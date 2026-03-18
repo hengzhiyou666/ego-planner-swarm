@@ -126,7 +126,7 @@ namespace ego_planner
     bool planFromCurrentPath(const int trial_times = 1);
 
     /* return value: std::pair< Times of the same state be continuously called, current continuously called state > */
-    void changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call);
+    void changeStateTo(FSM_EXEC_STATE new_state, string pos_call);
     std::pair<int, classEGOPlannerStateMachine::FSM_EXEC_STATE> timesOfConsecutiveStateCalls();
     void printCurrentState();
 
