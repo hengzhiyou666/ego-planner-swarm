@@ -102,7 +102,7 @@ namespace ego_planner
     void setControlPoints(const Eigen::MatrixXd &points);
     void setBsplineInterval(const double &ts);
     void setSwarmPaths(SwarmPathData *swarm_paths_ptr);
-    void setDroneId(const int drone_id);
+    void setDogId(const int dog_id);
 
     // optional inputs
     void setGuidePath(const vector<Eigen::Vector3d> &guide_pt);
@@ -130,7 +130,7 @@ namespace ego_planner
     GridMap::Ptr grid_map_;
     fast_planner::ObjPredictor::Ptr moving_objs_;
     SwarmPathData *swarm_paths_{NULL}; // Can not use shared_ptr and no need to free
-    int drone_id_;
+    int dog_id_;
 
     enum FORCE_STOP_OPTIMIZE_TYPE
     {

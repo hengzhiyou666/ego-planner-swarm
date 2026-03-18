@@ -196,7 +196,7 @@ namespace ego_planner
     double feasibility_tolerance_;        // permitted ratio of vel/acc exceeding limits
     double planning_horizen_;
     bool try_more_paths_and_choose_best;  // 是否尝试多条不同路径并从中挑选一条最优路径
-    int drone_id; // single drone: drone_id <= -1, swarm: drone_id >= 0
+    int dog_id; // single dog: dog_id <= -1, swarm: dog_id >= 0
 
     /* processing time */
     double time_search_ = 0.0;
@@ -219,7 +219,7 @@ namespace ego_planner
   {
     /* info of generated path */
 
-    int drone_id;
+    int dog_id;
     double duration_;
     rclcpp::Time start_time_;
     Eigen::Vector3d start_pos_;

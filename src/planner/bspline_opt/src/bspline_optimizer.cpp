@@ -53,7 +53,7 @@ namespace ego_planner
 
   void BsplineOptimizer::setSwarmPaths(SwarmPathData *swarm_paths_ptr) { swarm_paths_ = swarm_paths_ptr; }
 
-  void BsplineOptimizer::setDroneId(const int drone_id) { drone_id_ = drone_id; }
+  void BsplineOptimizer::setDogId(const int dog_id) { dog_id_ = dog_id; }
 
   // 返回多个安全的控制点集
   std::vector<ControlPoints> BsplineOptimizer::distinctivePaths(vector<std::pair<int, int>> segments)
@@ -885,7 +885,7 @@ namespace ego_planner
 
       for (size_t id = 0; id < swarm_paths_->size(); id++)
       {
-        if ((swarm_paths_->at(id).drone_id != (int)id) || swarm_paths_->at(id).drone_id == drone_id_)
+        if ((swarm_paths_->at(id).dog_id != (int)id) || swarm_paths_->at(id).dog_id == dog_id_)
         {
           continue;
         }
@@ -1799,7 +1799,7 @@ namespace ego_planner
   // 计算损失
   void BsplineOptimizer::combineCostRebound(const double *x, double *grad, double &f_combine, const int n)
   {
-    // cout << "drone_id_=" << drone_id_ << endl;
+    // cout << "dog_id_=" << dog_id_ << endl;
     // cout << "cps_.points.size()=" << cps_.points.size() << endl;
     // cout << "n=" << n << endl;
     // cout << "sizeof(x[0])=" << sizeof(x[0]) << endl;

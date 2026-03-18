@@ -1,4 +1,4 @@
-int32 drone_id
+int32 dog_id
 
 int32 order
 int64 path_id

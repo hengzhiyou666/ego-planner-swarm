@@ -46,14 +46,14 @@ namespace ego_planner
     // 把当前缓存的编队路径指针交给优化器，用于多机避碰
     void deliverPathToOptimizer(void) { bspline_optimizer_->setSwarmPaths(&swarm_paths_buf_); };
 
-    // 告诉优化器“我是谁”：设置当前无人机的 ID，方便做编队避障
-    void setDroneIdtoOpt(void) { bspline_optimizer_->setDroneId(pp_.drone_id); }
+    // 告诉优化器“我是谁”：设置当前机器狗的 ID，方便做编队避障
+    void setDogIdtoOpt(void) { bspline_optimizer_->setDogId(pp_.dog_id); }
 
     // 读取“编队安全间距”这个参数（两机之间至少要相距多少米）
     double getSwarmClearance(void) { return bspline_optimizer_->getSwarmClearance(); }
 
-    // 检查与指定 ID 的其他无人机路径是否发生碰撞
-    bool checkCollision(int drone_id);
+    // 检查与指定 ID 的其他机器狗路径是否发生碰撞
+    bool checkCollision(int dog_id);
     
 
     PlanParameters pp_;

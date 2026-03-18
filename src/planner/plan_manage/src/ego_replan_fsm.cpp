@@ -84,7 +84,7 @@ namespace ego_planner
     planner_manager_->initPlanModules(node_, visualization_);
 
     planner_manager_->deliverPathToOptimizer(); // store trajectories
-    planner_manager_->setDroneIdtoOpt();
+    planner_manager_->setDogIdtoOpt();
 
     //============================================回调函数=========================================================
     /* callback */
@@ -107,9 +107,9 @@ namespace ego_planner
     // std::bind(&classEGOPlannerStateMachine::autoFunction_GetOdometry, this, std::placeholders::_1));
 
     //============================================发布话题=========================================================
-    if (planner_manager_->pp_.drone_id >= 1)
+    if (planner_manager_->pp_.dog_id >= 1)
     {
-      string sub_topic_name = string("/drone_") + std::to_string(planner_manager_->pp_.drone_id - 1) + string("_planning/swarm_paths");
+      string sub_topic_name = string("/dog_") + std::to_string(planner_manager_->pp_.dog_id - 1) + string("_planning/swarm_paths");
       swarm_paths_sub_ = node_->create_subscription<path_tools::msg::MultiBsplines>(
           sub_topic_name,
           10,
@@ -120,15 +120,15 @@ namespace ego_planner
     }
 
     // ros2 中topic名字中不能出现负号，单机id是-1需要处理
-    // string pub_topic_name = string("/drone_") + std::to_string(planner_manager_->pp_.drone_id) + string("_planning/swarm_paths");
+    // string pub_topic_name = string("/dog_") + std::to_string(planner_manager_->pp_.dog_id) + string("_planning/swarm_paths");
     string pub_topic_name;
-    if (planner_manager_->pp_.drone_id <= -1)
+    if (planner_manager_->pp_.dog_id <= -1)
     {
-      RCLCPP_INFO(node_->get_logger(), "single drone:%d", planner_manager_->pp_.drone_id);
-      pub_topic_name = string("/drone_") + "single" + string("_planning/swarm_paths");
+      RCLCPP_INFO(node_->get_logger(), "single dog:%d", planner_manager_->pp_.dog_id);
+      pub_topic_name = string("/dog_") + "single" + string("_planning/swarm_paths");
     }else
     {
-      pub_topic_name = string("/drone_") + std::to_string(planner_manager_->pp_.drone_id) + string("_planning/swarm_paths");
+      pub_topic_name = string("/dog_") + std::to_string(planner_manager_->pp_.dog_id) + string("_planning/swarm_paths");
     }
     
     swarm_paths_pub_ = node_->create_publisher<path_tools::msg::MultiBsplines>(pub_topic_name, 10);
@@ -807,8 +807,8 @@ namespace ego_planner
 
   void classEGOPlannerStateMachine::BroadcastBsplineCallback(const std::shared_ptr<const path_tools::msg::Bspline> &msg)
   {
-    size_t id = msg->drone_id;
-    if ((int)id == planner_manager_->pp_.drone_id)
+    size_t id = msg->dog_id;
+    if ((int)id == planner_manager_->pp_.dog_id)
       return;
 
     // if (abs((ros::Time::now() - msg->start_time).toSec()) > 0.25)
@@ -819,9 +819,9 @@ namespace ego_planner
     // RCLCPP_INFO(node_->get_logger(), "msg_time: %d", msg_time.get_clock_type());
     if (abs((rclcpp::Clock().now() - msg_time).seconds()) > 0.25)
     {
-      // ROS_ERROR("Time difference is too large! Local - Remote Agent %d = %fs", msg->drone_id, (ros::Time::now() - msg->start_time).toSec());
+      // ROS_ERROR("Time difference is too large! Local - Remote Agent %d = %fs", msg->dog_id, (ros::Time::now() - msg->start_time).toSec());
       RCLCPP_ERROR(node_->get_logger(), "Time difference is too large! Local - Remote Agent %d = %fs",
-                   msg->drone_id, (rclcpp::Clock().now() - msg_time).seconds());
+                   msg->dog_id, (rclcpp::Clock().now() - msg_time).seconds());
       return;
     }
 
@@ -831,7 +831,7 @@ namespace ego_planner
       for (size_t i = planner_manager_->swarm_paths_buf_.size(); i <= id; i++)
       {
         OnePathDataOfSwarm blank;
-        blank.drone_id = -1;
+        blank.dog_id = -1;
         planner_manager_->swarm_paths_buf_.push_back(blank);
       }
     }
@@ -843,7 +843,7 @@ namespace ego_planner
     Eigen::Vector3d swarm_start_pt = (cp0 + 4 * cp1 + cp2) / 6;
     if ((swarm_start_pt - robot_location_now_fromOdomDirectly_).norm() > planning_horizen_ * 4.0f / 3.0f)
     {
-      planner_manager_->swarm_paths_buf_[id].drone_id = -1;
+      planner_manager_->swarm_paths_buf_[id].dog_id = -1;
       return; // if the current drone is too far to the received agent.
     }
 
@@ -861,7 +861,7 @@ namespace ego_planner
       pos_pts(2, j) = msg->pos_pts[j].z;
     }
 
-    planner_manager_->swarm_paths_buf_[id].drone_id = id;
+    planner_manager_->swarm_paths_buf_[id].dog_id = id;
 
     // 计算路径持续时间
     if (msg->order % 2)
@@ -903,9 +903,9 @@ namespace ego_planner
       return;
     }
 
-    if ((int)msg->path.size() != msg->drone_id_from + 1) // drone_id must start from 0
+    if ((int)msg->path.size() != msg->dog_id_from + 1) // dog_id must start from 0
     {
-      RCLCPP_ERROR(node_->get_logger(), "Wrong trajectory size!msg->path.size()=%d, msg->drone_id_from+1=%d", (int)msg->path.size(), msg->drone_id_from + 1);
+      RCLCPP_ERROR(node_->get_logger(), "Wrong trajectory size!msg->path.size()=%d, msg->dog_id_from+1=%d", (int)msg->path.size(), msg->dog_id_from + 1);
       return;
     }
 
@@ -929,7 +929,7 @@ namespace ego_planner
       Eigen::Vector3d swarm_start_pt = (cp0 + 4 * cp1 + cp2) / 6;
       if ((swarm_start_pt - robot_location_now_fromOdomDirectly_).norm() > planning_horizen_ * 4.0f / 3.0f)
       {
-        planner_manager_->swarm_paths_buf_[i].drone_id = -1;
+        planner_manager_->swarm_paths_buf_[i].dog_id = -1;
         continue;
       }
 
@@ -947,7 +947,7 @@ namespace ego_planner
         pos_pts(2, j) = msg->path[i].pos_pts[j].z;
       }
 
-      planner_manager_->swarm_paths_buf_[i].drone_id = i;
+      planner_manager_->swarm_paths_buf_[i].dog_id = i;
 
       // 计算路径持续时间
       if (msg->path[i].order % 2)
@@ -1021,36 +1021,41 @@ namespace ego_planner
 
     switch (current_state_)
     {
-    //casecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecase
+    //===============================1/6 state_one__wait_for_odom===============================================================
     // ----- 初始化：有里程计了就切到“等目标”，没有就啥也不干直接走人 -----
     case STATE_ONE__WAIT_FOR_ODOM:
     {
       cout << "[当前在状态机里]当前状态是：STATE_ONE__WAIT_FOR_ODOM" << endl;
-      if (!have_odom_)
+      if (have_odom_)
+      {
+        cout<<"which中，从STATE_ONE__WAIT_FOR_ODOM状态切换到WAIT_TARGET状态"<<endl;
+        changeStateTo(WAIT_TARGET, "FSM");
+        break;
+      }
+      else
       {
         goto force_return;
       }
-      changeStateTo(WAIT_TARGET, "FSM");
-      break;
     }
 
-    //casecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecase
+    //===============================2/6 wait_target===============================================================
     // ----- 等目标：还没收到目标或触发信号就 return；都有了就进“生成新路径”去算第一条轨迹 -----
     case WAIT_TARGET:
     {
       cout << "[当前在状态机里]当前状态是：WAIT_TARGET" << endl;
       if (have_target_ && have_trigger_)
       {
+        cout<<"which中，从WAIT_TARGET状态切换到GEN_NEW_PATH状态"<<endl;
         changeStateTo(GEN_NEW_PATH, "FSM");
+        break;
       }
       else
       {
         goto force_return;
       }
-      break;
     }
 
-    //casecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecase
+    //===============================3/6 gen_new_path===============================================================
     // ----- 生成新路径：从当前位置算一条全新的全局+局部轨迹；成功就“执行”，失败且已经靠近终点就切下一路点或回“等目标” -----
     case GEN_NEW_PATH:
     {
@@ -1086,7 +1091,7 @@ namespace ego_planner
       break;
     }
 
-    //casecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecase
+    //===============================4/6 replan_path===============================================================
     // ----- 重规划：从当前轨迹上的“现在”位置再算一条新轨迹；成功就“执行”，失败且靠近终点就下一路点或回“等目标” -----
     case REPLAN_PATH:
     {
@@ -1128,7 +1133,7 @@ namespace ego_planner
       break;
     }
 
-    //casecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecase
+    //===============================5/6 exec_path===============================================================
     // ----- 执行路径：看当前走到哪了；够时间/距离就触发“重规划”，快到终点或跑完就下一路点或回“等目标” -----
     case EXEC_PATH:
     {
@@ -1243,7 +1248,7 @@ namespace ego_planner
       break;
     }
 
-    //casecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecasecase
+    //===============================6/6 emergency_stop===============================================================
     // ----- 紧急停：先发一条“原地停”的轨迹；若开了 fail_safe 且速度下来了就尝试回到“生成新路径” -----
     case EMERGENCY_STOP:
     {
@@ -1422,7 +1427,7 @@ namespace ego_planner
       // 集群：与其它机的预测位置距离小于 CLEARANCE 则视为碰撞
       for (size_t id = 0; id < planner_manager_->swarm_paths_buf_.size(); id++)
       {
-        if ((planner_manager_->swarm_paths_buf_.at(id).drone_id != (int)id) || (planner_manager_->swarm_paths_buf_.at(id).drone_id == planner_manager_->pp_.drone_id))
+        if ((planner_manager_->swarm_paths_buf_.at(id).dog_id != (int)id) || (planner_manager_->swarm_paths_buf_.at(id).dog_id == planner_manager_->pp_.dog_id))
           continue;
 
         double t_X = t_cur_global - planner_manager_->swarm_paths_buf_.at(id).start_time_.seconds();
@@ -1496,6 +1501,7 @@ namespace ego_planner
       path_tools::msg::Bspline bspline;
       bspline.order = 3;
       bspline.start_time = info->start_time_;
+      bspline.dog_id = planner_manager_->pp_.dog_id;
       bspline.path_id = info->path_id_;
 
       // 控制点：从 position_path_ 的矩阵按列转为 geometry_msgs::Point 数组
@@ -1537,7 +1543,7 @@ namespace ego_planner
     path_tools::msg::Bspline bspline;
     bspline.order = 3;
     bspline.start_time = info->start_time_;
-    bspline.drone_id = planner_manager_->pp_.drone_id;
+    bspline.dog_id = planner_manager_->pp_.dog_id;
     bspline.path_id = info->path_id_;
 
     Eigen::MatrixXd pos_pts = info->position_path_.getControlPoint();
@@ -1561,18 +1567,18 @@ namespace ego_planner
 
     if (startup_pub)
     {
-      multi_bspline_msgs_buf_.drone_id_from = planner_manager_->pp_.drone_id; // zx-todo
-      if ((int)multi_bspline_msgs_buf_.path.size() == planner_manager_->pp_.drone_id + 1)
+      multi_bspline_msgs_buf_.dog_id_from = planner_manager_->pp_.dog_id; // zx-todo
+      if ((int)multi_bspline_msgs_buf_.path.size() == planner_manager_->pp_.dog_id + 1)
       {
         multi_bspline_msgs_buf_.path.back() = bspline;
       }
-      else if ((int)multi_bspline_msgs_buf_.path.size() == planner_manager_->pp_.drone_id)
+      else if ((int)multi_bspline_msgs_buf_.path.size() == planner_manager_->pp_.dog_id)
       {
         multi_bspline_msgs_buf_.path.push_back(bspline);
       }
       else
       {
-        RCLCPP_ERROR(node_->get_logger(), "Wrong path nums and drone_id pair!!! path.size()=%d, drone_id=%d", (int)multi_bspline_msgs_buf_.path.size(), planner_manager_->pp_.drone_id);
+        RCLCPP_ERROR(node_->get_logger(), "Wrong path nums and dog_id pair!!! path.size()=%d, dog_id=%d", (int)multi_bspline_msgs_buf_.path.size(), planner_manager_->pp_.dog_id);
         // return plan_and_refine_success;
       }
       // swarm_paths_pub_.publish(multi_bspline_msgs_buf_);

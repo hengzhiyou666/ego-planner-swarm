@@ -13,8 +13,8 @@ from launch.conditions import IfCondition
 
 def generate_launch_description():
     # =================先记住“我要用哪个参数”，等真正启动时再把实际值塞进来==================
-    # ----- 通用参数（保留 drone_id 以复用原有命名空间/话题约定） -----
-    drone_id = LaunchConfiguration('drone_id', default=0)
+    # ----- 通用参数（dog_id：机器狗 ID） -----
+    dog_id = LaunchConfiguration('dog_id', default=0)
     obj_num = LaunchConfiguration('obj_num', default=10)
     map_size_x = LaunchConfiguration('map_size_x', default=90.0)  # 原为50.0
     map_size_y = LaunchConfiguration('map_size_y', default=130.0)  # 原为25.0
@@ -67,7 +67,7 @@ def generate_launch_description():
 
     # ----- 声明 Launch 参数 -----
     launch_plan = LaunchDescription()
-    launch_plan.add_action(DeclareLaunchArgument('drone_id', default_value='0', description='Drone ID'))
+    launch_plan.add_action(DeclareLaunchArgument('dog_id', default_value='0', description='Dog ID'))
     launch_plan.add_action(DeclareLaunchArgument('obj_num', default_value='10', description='Number of objects'))
     launch_plan.add_action(DeclareLaunchArgument('map_size_x', default_value='90.0', description='Map size X (m)'))
     launch_plan.add_action(DeclareLaunchArgument('map_size_y', default_value='130.0', description='Map size Y (m)'))
@@ -102,25 +102,25 @@ def generate_launch_description():
     ego_planner_node = Node(
         package='ego_planner',
         executable='ego_planner_node',
-        name=['drone_', drone_id, '_ego_planner_node'],
+        name=['dog_', dog_id, '_ego_planner_node'],
         output='screen',
         condition=IfCondition(use_real_robot),
         remappings=[
             ('odom_world', odometry_topic),
-            ('planning/bspline', ['drone_', drone_id, '_planning/bspline']),
-            ('planning/data_display', ['drone_', drone_id, '_planning/data_display']),
+            ('planning/bspline', ['dog_', dog_id, '_planning/bspline']),
+            ('planning/data_display', ['dog_', dog_id, '_planning/data_display']),
             ('planning/broadcast_bspline_from_planner', '/broadcast_bspline'),
             ('planning/broadcast_bspline_to_planner', '/broadcast_bspline'),
-            ('goal_point', ['drone_', drone_id, '_plan_vis/goal_point']),
-            ('global_list', ['drone_', drone_id, '_plan_vis/global_list']),
-            ('init_list', ['drone_', drone_id, '_plan_vis/init_list']),
-            ('optimal_list', ['drone_', drone_id, '_plan_vis/optimal_list']),
-            ('a_star_list', ['drone_', drone_id, '_plan_vis/a_star_list']),
+            ('goal_point', ['dog_', dog_id, '_plan_vis/goal_point']),
+            ('global_list', ['dog_', dog_id, '_plan_vis/global_list']),
+            ('init_list', ['dog_', dog_id, '_plan_vis/init_list']),
+            ('optimal_list', ['dog_', dog_id, '_plan_vis/optimal_list']),
+            ('a_star_list', ['dog_', dog_id, '_plan_vis/a_star_list']),
             ('grid_map/odom', odometry_topic),
             ('grid_map/cloud', cloud_topic),
             ('grid_map/pose', camera_pose_topic),
             ('grid_map/depth', depth_topic),
-            ('grid_map/occupancy_inflate', ['drone_', drone_id, '_grid/grid_map/occupancy_inflate'])
+            ('grid_map/occupancy_inflate', ['dog_', dog_id, '_grid/grid_map/occupancy_inflate'])
         ],
         parameters=[
             {'fsm/egoplanner_input_point_or_path': egoplanner_input_point_or_path},
@@ -159,7 +159,7 @@ def generate_launch_description():
             {'manager/control_points_distance': 0.1}, {'manager/feasibility_tolerance': 0.05},
             {'manager/path_ahead_time': path_ahead_time},
             {'manager/try_more_paths_and_choose_best': try_more_paths_and_choose_best},
-            {'manager/drone_id': drone_id},
+            {'manager/dog_id': dog_id},
             {'optimization/lambda_smooth': 1.0}, {'optimization/lambda_collision': 0.5},
             {'optimization/lambda_feasibility': 0.1}, {'optimization/lambda_fitness': 5.0},
             {'optimization/dist0': 0.5}, {'optimization/swarm_clearance': 0.5},

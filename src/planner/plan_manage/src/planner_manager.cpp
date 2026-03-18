@@ -20,7 +20,7 @@ namespace ego_planner
     node->declare_parameter("manager/control_points_distance", -1.0);
     node->declare_parameter("manager/path_ahead_time", 5.0);
     node->declare_parameter("manager/try_more_paths_and_choose_best", false);
-    node->declare_parameter("manager/drone_id", -1);
+    node->declare_parameter("manager/dog_id", -1);
 
     node->get_parameter("manager/max_vel", pp_.max_vel_);
     node->get_parameter("manager/max_acc", pp_.max_acc_);
@@ -29,7 +29,7 @@ namespace ego_planner
     node->get_parameter("manager/control_points_distance", pp_.ctrl_pt_dist);
     node->get_parameter("manager/path_ahead_time", pp_.planning_horizen_);
     node->get_parameter("manager/try_more_paths_and_choose_best", pp_.try_more_paths_and_choose_best);
-    node->get_parameter("manager/drone_id", pp_.drone_id);
+    node->get_parameter("manager/dog_id", pp_.dog_id);
 
     local_data_.path_id_ = 0;
     grid_map_.reset(new GridMap);
@@ -336,7 +336,7 @@ namespace ego_planner
 
     // ==================== 模块 4：时间重分配（STEP 3 REFINE） ====================
     // 若速度/加速度超限，则拉长时间轴重新参数化并再优化一次；仅单机或 drone_0 时启用
-    if (pp_.drone_id <= 0)
+    if (pp_.dog_id <= 0)
     {
 
       double ratio;
@@ -403,24 +403,24 @@ namespace ego_planner
     return true;
   }
 
-  /** 检查本机轨迹与指定无人机 drone_id 的轨迹在时间重叠段内是否小于群控间距：若存在某时刻距离 < swarm_clearance 则返回 true（发生碰撞），否则返回 false。 */
-  bool EGOPlannerManager::checkCollision(int drone_id)
+  /** 检查本机轨迹与指定机器狗 dog_id 的轨迹在时间重叠段内是否小于群控间距：若存在某时刻距离 < swarm_clearance 则返回 true（发生碰撞），否则返回 false。 */
+  bool EGOPlannerManager::checkCollision(int dog_id)
   {
     // if (local_data_.start_time_.toSec() < 1e9) // It means my first planning has not started
     if (local_data_.start_time_.seconds() < 1e9)
       return false;
 
     // double my_traj_start_time = local_data_.start_time_.toSec();
-    // double other_traj_start_time = swarm_paths_buf_[drone_id].start_time_.toSec();
+    // double other_traj_start_time = swarm_paths_buf_[dog_id].start_time_.toSec();
     double my_path_start_time = local_data_.start_time_.seconds();
-    double other_path_start_time = swarm_paths_buf_[drone_id].start_time_.seconds();
+    double other_path_start_time = swarm_paths_buf_[dog_id].start_time_.seconds();
 
     double t_start = max(my_path_start_time, other_path_start_time);
-    double t_end = min(my_path_start_time + local_data_.duration_ * 2 / 3, other_path_start_time + swarm_paths_buf_[drone_id].duration_);
+    double t_end = min(my_path_start_time + local_data_.duration_ * 2 / 3, other_path_start_time + swarm_paths_buf_[dog_id].duration_);
 
     for (double t = t_start; t < t_end; t += 0.03)
     {
-      if ((local_data_.position_path_.evaluateDeBoorT(t - my_path_start_time) - swarm_paths_buf_[drone_id].position_path_.evaluateDeBoorT(t - other_path_start_time)).norm() < bspline_optimizer_->getSwarmClearance())
+      if ((local_data_.position_path_.evaluateDeBoorT(t - my_path_start_time) - swarm_paths_buf_[dog_id].position_path_.evaluateDeBoorT(t - other_path_start_time)).norm() < bspline_optimizer_->getSwarmClearance())
       {
         return true;
       }
