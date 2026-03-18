@@ -94,7 +94,7 @@ namespace ego_planner
 
     // 安全定时器：每 100 ms 调用一次碰撞检测回调，检查障碍物并触发重规划
     safety_timer_ = node_->create_wall_timer(std::chrono::milliseconds(100),
-                                             std::bind(&classEGOPlannerStateMachine::function_checkStoneCallback_every100ms, this));
+                                             std::bind(&classEGOPlannerStateMachine::autofunction_checkStoneCallback_every100ms, this));
 
     //============================================订阅话题=========================================================
     odom_sub_ = node_->create_subscription<nav_msgs::msg::Odometry>(
@@ -1372,7 +1372,7 @@ namespace ego_planner
    * 安全检测回调：每 100ms 由定时器调用一次。检查 (1) 深度/传感器是否超时 (2) 当前轨迹是否与障碍或其它机发生碰撞；
    * 若碰撞则尝试从当前轨迹重规划，失败则根据时间紧急程度切到 EMERGENCY_STOP 或 REPLAN_PATH。
    */
-  void classEGOPlannerStateMachine::function_checkStoneCallback_every100ms()
+  void classEGOPlannerStateMachine::autofunction_checkStoneCallback_every100ms()
   {
     LocalPathData *info = &planner_manager_->local_data_;
     auto map = planner_manager_->grid_map_;
@@ -1388,6 +1388,15 @@ namespace ego_planner
       enable_fail_safe_ = false;
       changeFSMExecState(EMERGENCY_STOP, "SAFETY");
     }
+
+    // ---------- 若地图自上次检查以来完全未更新，在当前 EXEC_PATH 下直接沿用原局部路径，不做重新碰撞检测 ----------
+    // 这样可以实现“障碍物位置与大小都未变化时，局部路径保持不变，机器狗沿当前轨迹继续前进”
+    int cur_grid_update_num = map->getUpdateNum();
+    if (current_state_ == EXEC_PATH && last_grid_update_num_ == cur_grid_update_num)
+    {
+      return;
+    }
+    last_grid_update_num_ = cur_grid_update_num;
 
     // ---------- 轨迹碰撞检测：从当前时刻 t_cur 起，沿轨迹以 0.01s 步长采样，检查每点是否占据障碍或与其它机过近 ----------
     constexpr double time_step = 0.01;

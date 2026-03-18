@@ -203,6 +203,8 @@ public:
   int getVoxelNum();
   /** 仅在使用深度参与占据更新时为 true（深度/odom 超时）；仅点云避障时恒为 false，不触发“深度丢失”紧急停 */
   bool getOdomDepthTimeout() { return mp_.use_depth_for_occupancy_ && md_.flag_depth_odom_timeout_; }
+  /** 返回占据融合迭代次数：每次根据新深度/点云更新局部栅格时自增，可用于“地图是否发生变化”的快速判断 */
+  int getUpdateNum() const { return md_.update_num_; }
 
   typedef std::shared_ptr<GridMap> Ptr;
 

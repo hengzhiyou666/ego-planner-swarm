@@ -77,6 +77,8 @@ namespace ego_planner
     nav_msgs::msg::Path last_pct_path_;
     FSM_EXEC_STATE current_state_;
     int continously_called_times_{0};
+    /** 上一次安全检测时 grid_map 的更新计数，用于“障碍是否发生变化”的判断 */
+    int last_grid_update_num_{-1};
 
     Eigen::Vector3d robot_location_now_fromOdomDirectly_, robot_vel_now_fromOdomDirectly_, odom_acc_; // odometry state
     Eigen::Quaterniond odom_orient_;
@@ -141,7 +143,7 @@ namespace ego_planner
 
     /* ROS functions */
     void function_runWhichStateNow_every10ms();
-    void function_checkStoneCallback_every100ms();
+    void autofunction_checkStoneCallback_every100ms();
     void waypointCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg);
     void triggerCallback(const std::shared_ptr<const geometry_msgs::msg::PoseStamped> &msg);
     void autoFunction_GetOdometry(const std::shared_ptr<const nav_msgs::msg::Odometry> &msg);

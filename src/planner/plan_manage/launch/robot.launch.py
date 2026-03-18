@@ -43,7 +43,7 @@ def generate_launch_description():
     # 是否自动启动 RViz（Fixed Frame: head_init；话题：/pct_path_unfinished, /odometry, /drone_0_plan_vis/optimal_list, /drone_0_plan_vis/goal_point）
     rviz = LaunchConfiguration('rviz', default='true')
     # pct_path 判重：True=与上次路径相同时跳过计算；False=不检测，每次都执行
-    pct_path_skip_if_same = LaunchConfiguration('pct_path_skip_if_same', default=False)
+    pct_path_skip_if_same = LaunchConfiguration('pct_path_skip_if_same', default=True)
     cx = LaunchConfiguration('cx', default='959.196655')
     cy = LaunchConfiguration('cy', default='538.812378')
     fx = LaunchConfiguration('fx', default='805.299072')
